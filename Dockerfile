@@ -1,4 +1,4 @@
-FROM python:3.12.11-alpine3.22 AS builder
+FROM python:3.14.5-alpine3.22 AS builder
 
 RUN pip install --no-cache-dir poetry==2.1.1
 
@@ -11,7 +11,7 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock* ./
 RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main --no-root
 
-FROM python:3.12.11-alpine3.22 AS runtime
+FROM python:3.14.5-alpine3.22 AS runtime
 
 WORKDIR /service
 ENV VIRTUAL_ENV=/app/.venv \
