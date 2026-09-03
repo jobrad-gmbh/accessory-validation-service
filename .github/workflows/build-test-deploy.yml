@@ -20,7 +20,7 @@ jobs:
     runs-on: [self-hosted, short]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
       - name: Setup Nomad
         uses: hashicorp/setup-nomad@v1.0.0
       - name: Deploy Nomad job
