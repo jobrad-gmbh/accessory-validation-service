@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: accessory-validator
+  title: Accessory Validator
+  description: Classifies bicycle accessories as leasable or not leasable
+  annotations:
+    github.com/project-slug: jobrad-gmbh/accessory-validator
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - python
+    - fastapi
+    - llm
+spec:
+  type: service
+  lifecycle: experimental
+  owner: replace-with-owning-team

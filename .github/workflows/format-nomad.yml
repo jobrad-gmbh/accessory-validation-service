@@ -1,0 +1,11 @@
+name: Ensure Nomad files are formatted
+
+on:
+  push:
+    paths:
+      - "**/*.hcl"
+      - "**/*.nomad"
+
+jobs:
+  format-nomad:
+    uses: jobrad-gmbh/devex-ci-templates/.github/workflows/format-nomad.yml@v5.0.0

@@ -1,0 +1,14 @@
+name: Ensure Python code is formatted and linted
+
+on:
+  push:
+    branches: ["**"]
+
+jobs:
+  ruff:
+    uses: jobrad-gmbh/devex-ci-templates/.github/workflows/ruff.yaml@v5.2.0
+  mypy:
+    uses: jobrad-gmbh/devex-ci-templates/.github/workflows/mypy.yaml@v5.2.0
+    with:
+      poetry_version: "2.1.1"
+      project_path: app
