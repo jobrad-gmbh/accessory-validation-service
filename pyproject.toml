@@ -1,0 +1,45 @@
+[tool.poetry]
+package-mode = false
+name = "${{ values.projectNameKebab }}"
+version = "0.2.0"
+description = "${{ values.projectDescription }}"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "${{ values.pythonVersion }}"
+fastapi = "0.116.1"
+uvicorn = "0.35.0"
+pydantic = "2.11.7"
+pydantic-settings = "2.10.1"
+{%- if 'postgresql' in values.features %}
+sqlalchemy = "2.0.41"
+psycopg = {extras = ["binary"], version = "3.2.9"}
+alembic = "1.16.4"
+{%- endif %}
+{%- if 'kafka' in values.features %}
+aiokafka = "0.12.0"
+{%- endif %}
+{%- if 'opentelemetry' in values.features %}
+prometheus-client = "0.22.1"
+{%- endif %}
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "0.12.3"
+mypy = "1.16.1"
+pre-commit = "4.2.0"
+pytest = "8.4.1"
+httpx = "0.28.1"
+pytest-mypy = "1.0.1"
+testcontainers = {version = "4.10.0", extras = ["postgres", "kafka"]}
+pytest-asyncio = "0.25.0"
+psycopg2-binary = "2.9.10" # Needed for postgres testcontainer
+
+[tool.pytest.ini_options]
+testpaths = [
+    "app"
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

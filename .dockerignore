@@ -1,0 +1,8 @@
+**/*
+
+!app/
+!poetry.lock
+!pyproject.toml
+!entrypoint.sh
+
+app/tests/

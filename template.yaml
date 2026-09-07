@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=https://json.schemastore.org/yamllint.json
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: python-template
+  title: Python Template
+  description: |
+    JobRad Python Service Template
+
+    Welcome! You are at the first step in your journey to create a new Python service
+    in the JobRad universe. This template repository will help you to jump start
+    a new service within a couple of minutes.
+    
+    Using this template, you will spawn a FastAPI powered Python Backend Service.
+
+spec:
+  owner: default/developer-experience
+  type: service
+  
+  parameters:
+    - title: Basics
+      description: Enter the base settings for your new service
+      required:
+        - projectName
+        - projectTeam
+      properties:
+        projectName:
+          title: 'Service Name'
+          description: 'Enter your service name in human-readable form'
+          type: string
+          ui:autofocus: true
+          ui:placeholder: 'My Bikethon Service'
+        projectTeam:
+          title: Team Name
+          description: Which team owns this service
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+        projectDescription:
+          title: 'Description'
+          type: string
+          default: ''
+          ui:widget: textarea
+          ui:options:
+            rows: 5
+
+    - title: Technical Details
+      description: Define the technical capabilities of your new service
+      required:
+        - port
+        - pythonVersion
+        - features
+      properties:
+        port:
+          title: 'Service Port'
+          description: 'On which port should your service be accessible? Note: Avoid 5432 (PostgreSQL), 8080 (Kafka UI), 9092 (Kafka), and other common infrastructure ports.'
+          type: number
+          minimum: 1024
+          maximum: 65535
+          ui:autofocus: true
+          ui:help: 'Choose a port between 1024-65535. Ports 5432, 8080, 9092, and 9093 are reserved for infrastructure services.'
+        pythonVersion:
+          title: 'Python Version'
+          description: 'The Python version to be used as semantic version number'
+          type: string
+          default: '3.12.11'
+        features:
+          title: Which features do you need?
+          description: Select one or more features.
+          type: array
+          uniqueItems: true
+          ui:widget: checkboxes
+          items:
+            type: string
+            enum:
+              - postgresql
+              - kafka
+              - opentelemetry
+            enumNames:
+              - PostgreSQL
+              - Kafka
+              - OpenTelemetry
+
+    - title: Deployment
+      description: Define some parameters for the Nomad deployment
+      required:
+        - nomadNamespace
+        - memory
+        - cpu
+      properties:
+        nomadNamespace:
+          title: 'Nomad Namespace'
+          description: 'In which Nomad namespace will your service be deployed?'
+          type: string
+          default: "pto"
+          ui:autofocus: true
+        cpu:
+          title: 'CPU requirements of your service'
+          description: 'How much CPU does your service need (given in MHz)'
+          type: integer
+          minimum: 128
+          maximum: 1024
+          multipleOf: 128
+          default: 256
+          ui:widget: range
+        memory:
+          title: 'Memory requirements of your service'
+          description: 'How much RAM does your service need (given in MiB)'
+          type: integer
+          minimum: 256
+          maximum: 2048
+          multipleOf: 256
+          default: 512
+          ui:widget: range
+
+    - title: Choose a location
+      description: |
+        This section will ask for details about the Owner and Repository name which will then be used 
+        to create a repository in that location using your GitHub credentials.
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Enter an Owner and Repository Name
+          description: |
+            The Owner should be your GitHub username. The Repository name should be a name that is not one that exists already in your GitHub account.
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            requestUserCredentials:
+              secretsKey: USER_OAUTH_TOKEN
+              additionalScopes:
+                github:
+                  - workflow
+            allowedHosts:
+              - github.com
+            allowedOwners:
+              - jobrad-gmbh
+
+  steps:
+    - id: list-inputs
+      name: List Inputs
+      action: debug:log
+      input:
+        message: |
+          The following inputs were provided: 
+            - Name: ${{ parameters.projectName }}
+            - Port: ${{ parameters.port }}
+          Technical Details:
+            - Python: python-${{ parameters.pythonVersion }}
+            - Features: ${{ parameters.features }}
+          Deployment:
+            - Namespace: ${{ parameters.nomadNamespace }}
+            - CPU: ${{ parameters.cpu }} MHz
+            - RAM: ${{ parameters.memory }} MiB
+            - Repo: ${{ parameters.repoUrl }}
+    - id: fetch-skeleton
+      name: Fetch Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        token: ${{ secrets.USER_OAUTH_TOKEN or false }}
+        values:
+          projectName: ${{ parameters.projectName }}
+          projectTeam: ${{ parameters.projectTeam }}
+          projectDescription: ${{ parameters.projectDescription }}
+          projectNameKebab: ${{ parameters.projectName | kebab }}
+          projectNameFlat: ${{ parameters.projectName | flat }}
+          projectNamePascal: ${{ parameters.projectName | pascal }}
+          dockerImageName: ${{ parameters.projectName | kebab }}
+          port: ${{ parameters.port }}
+          pythonVersion: ${{ parameters.pythonVersion }}
+          nomadNamespace: ${{ parameters.nomadNamespace }}
+          features: ${{ parameters.features }}
+          nomadCpu: ${{ parameters.cpu }}
+          nomadMemory: ${{ parameters.memory }}
+          postgresVersion: "17.3"
+    - id: publish
+      name: Publish
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        token: ${{ secrets.USER_OAUTH_TOKEN or false }}
+        repoVisibility: private
+        defaultBranch: main
+        deleteBranchOnMerge: true
+        description: ${{ parameters.projectDescription }}
+        hasWiki: false
+        hasIssues: false
+        hasProjects: false
+        requiredLinearHistory: true
+        allowMergeCommit: false
+
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'

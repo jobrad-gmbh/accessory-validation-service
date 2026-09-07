@@ -1,0 +1,75 @@
+variable "namespace" {
+  type    = string
+  default = "${{ values.nomadNamespace }}"
+}
+
+job "${{ values.projectNameKebab }}-postgres" {
+  datacenters = ["dc1"]
+  namespace   = var.namespace
+
+  group "${{ values.projectNameKebab }}-postgres" {
+    count = 1
+
+    network {
+      mode = "bridge"
+    }
+
+    service {
+      name = "${var.namespace}-${{ values.projectNameKebab }}-postgres"
+      port = "5432"
+      connect {
+        sidecar_service {}
+      }
+    }
+    task "postgres" {
+      driver = "docker"
+
+      config {
+        image = "postgres:${{ values.postgresVersion }}"
+        ports = [5432]
+      }
+
+      env = {
+        # fix lost+found error and initdb
+        PGDATA = "/var/lib/postgresql/data/pgdata"
+      }
+
+      volume_mount {
+        volume      = "database"
+        destination = "/var/lib/postgresql/data"
+        read_only   = false
+      }
+
+      vault {}
+
+      template {
+        destination = "secrets/env.conf"
+        env         = true
+        data        = <<-EOH
+{% raw %}{{ {% endraw %} with secret "nomad_kv_${var.namespace}/data/{{ cookiecutter.__project_name_flat }}" {% raw %}}}{% endraw %}
+POSTGRES_DB="{% raw %}{{ .Data.data.POSTGRES_DB }}{% endraw %}"
+POSTGRES_USER="{% raw %}{{ .Data.data.POSTGRES_USER }}{% endraw %}"
+POSTGRES_PASSWORD="{% raw %}{{ .Data.data.POSTGRES_PASSWORD }}{% endraw %}"
+ {{ end }}
+EOH
+      }
+
+      resources {
+        cpu    = 1 * 128
+        memory = 6 * 128
+      }
+
+    }
+    volume "database" {
+      type            = "csi"
+      source          = "${{ values.projectNameKebab }}-data"
+      read_only       = false
+      access_mode     = "single-node-writer"
+      attachment_mode = "file-system"
+      mount_options {
+        fs_type     = "ext4"
+        mount_flags = ["noatime"]
+      }
+    }
+  }
+}

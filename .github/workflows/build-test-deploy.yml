@@ -1,0 +1,30 @@
+name: Push to main branch or PR
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    uses: jobrad-gmbh/devex-ci-templates/.github/workflows/pytest.yaml@v5.2.0
+    with:
+      poetry_version: "2.1.1"
+
+  build:
+    uses: jobrad-gmbh/devex-ci-templates/.github/workflows/docker-build-push.yaml@v5.2.0
+
+  deploy:
+    needs: [build, test]
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, short]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+      - name: Setup Nomad
+        uses: hashicorp/setup-nomad@v1.0.0
+      - name: Deploy Nomad job
+        env:
+          NOMAD_ADDR: https://nomad.jobrad.dev
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+        run: nomad job run -var tag=${{ github.sha }} nomad/dev/accessory-validator.nomad

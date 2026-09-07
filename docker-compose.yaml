@@ -1,0 +1,87 @@
+# Run a postgres container and optionally Kafka for local development
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+{%- if 'postgresql' in values.features or 'kafka' in values.features %}
+    depends_on:
+{%- if 'postgresql' in values.features %}
+      db:
+        condition: service_healthy
+{%- endif %}
+{%- if 'kafka' in values.features %}
+      kafka:
+        condition: service_started
+{%- endif %}
+{%- endif %}
+    ports:
+      - "${{ values.port }}:${{ values.port }}"
+    env_file:
+      - .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${{ values.port }}
+{%- if 'postgresql' in values.features %}
+  db:
+    image: postgres:${{ values.postgresVersion }}-alpine3.21
+    restart: always
+    shm_size: 128mb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:${DATABASE_PORT?Variable not set}"
+    env_file:
+      - .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD?Variable not set}
+      - POSTGRES_USER=${DATABASE_USER?Variable not set}
+      - POSTGRES_DB=${DATABASE_NAME?Variable not set}
+{%- endif %}
+
+{%- if 'kafka' in values.features %}
+  kafka:
+    image: confluentinc/cp-kafka:7.4.5
+    restart: always
+    ports:
+      - "9092:29092"
+    environment:
+      CLUSTER_ID: I8OWpUq9RpiKXngLYkTwhg
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+
+  kafka-ui:
+    image: docker.redpanda.com/redpandadata/console:v3.0.0
+    restart: always
+    depends_on:
+      kafka:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["kafka:9092"]
+{%- endif %}
+
+{%- if 'postgresql' in values.features %}
+volumes:
+  dev-db-data:
+{%- endif %}

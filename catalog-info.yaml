@@ -1,0 +1,29 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.projectNameKebab }}
+  title: ${{ values.projectName }}
+  description: ${{ values.projectDescription }}
+  annotations:
+    github.com/project-slug: jobrad-gmbh/${{ values.projectNameKebab }}
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - python
+    - fastapi
+{%- if 'postgresql' in values.features %}
+    - postgresql
+{%- endif %}
+{%- if 'kafka' in values.features %}
+    - kafka
+{%- endif %}
+{%- if 'opentelemetry' in values.features %}
+    - opentelemetry
+{%- endif %}
+  links:
+    - url: https://github.com/jobrad-gmbh/${{ values.projectNameKebab }}
+      title: Repository
+      icon: github
+spec:
+  type: service
+  lifecycle: experimental
+  owner: ${{ values.projectTeam }}
