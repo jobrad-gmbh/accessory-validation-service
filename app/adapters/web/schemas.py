@@ -1,37 +1,46 @@
-from pydantic import BaseModel
+from decimal import Decimal
 
-from app.domain.entities import BikeType
+from pydantic import BaseModel, Field
+
+from app.domain.products import Product, ProductOrigin, ProductType
+from app.domain.validation import ValidationContext
+from app.domain.validation.request import ValidationRequest
 
 
-class BikeCreateWebRequest(BaseModel):
-    """Request schema for creating a bike."""
+class AccessoryOrigin(BaseModel):
+    """Reference to the accessory record in its origin system."""
+
+    external_ref: str
+    source: str
+
+
+class AccessoryInput(BaseModel):
+    """Complete submitted payload, including validation context and origin."""
 
     brand: str
     model: str
-    bike_type: BikeType
+    price: Decimal = Field(ge=0, allow_inf_nan=False)
+    context: ValidationContext
+    origin: AccessoryOrigin
+    color: str | None = None
+    size: str | None = None
 
-
-class BikeUpdateWebRequest(BaseModel):
-    """Request schema for updating a bike."""
-
-    brand: str
-    model: str
-    bike_type: BikeType
-
-
-class BikeWebResponse(BaseModel):
-    """Response schema for a bike."""
-
-    id: int
-    brand: str
-    model: str
-    bike_type: BikeType
-
-
-class BikeListWebResponse(BaseModel):
-    """Response schema for bike list."""
-
-    data: list[BikeWebResponse]
+    def to_domain(self) -> ValidationRequest:
+        return ValidationRequest(
+            product=Product(
+                product_type=ProductType.ACCESSORY,
+                brand=self.brand,
+                model=self.model,
+                price=self.price,
+                color=self.color,
+                size=self.size,
+                origin=ProductOrigin(
+                    source=self.origin.source,
+                    external_ref=self.origin.external_ref,
+                ),
+            ),
+            context=self.context,
+        )
 
 
 class ErrorWebResponse(BaseModel):
