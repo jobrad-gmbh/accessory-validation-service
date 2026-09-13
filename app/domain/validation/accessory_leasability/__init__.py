@@ -8,6 +8,7 @@ from app.domain.validation.accessory_leasability.criteria import (
     TechnicalBicycleComponentCriterion,
 )
 from app.domain.validation.accessory_leasability.strategy import (
+    bawu_leasability_strategy,
     standard_leasability_strategy,
 )
 from app.domain.validation.accessory_leasability.validation import (
@@ -24,4 +25,5 @@ __all__ = [
     "StvzoEquipmentCriterion",
     "TechnicalBicycleComponentCriterion",
     "standard_leasability_strategy",
+    "bawu_leasability_strategy",
 ]

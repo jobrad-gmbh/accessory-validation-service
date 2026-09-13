@@ -11,6 +11,13 @@ class ProductType(StrEnum):
 
 
 @dataclass(frozen=True, kw_only=True)
+class ProductContext:
+    """Order information used to select applicable product validation rules."""
+
+    is_bawu_order: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
 class ProductInput:
     product_type: ProductType
     brand: str

@@ -1,11 +1,6 @@
 from dataclasses import dataclass, field
 
-from app.domain.products.product import Product
-
-
-@dataclass(frozen=True)
-class ValidationContext:
-    """Typed business context; fields are added when their meaning is defined."""
+from app.domain.products.product import Product, ProductContext
 
 
 @dataclass(frozen=True)
@@ -17,4 +12,4 @@ class ValidationRequest:
     """
 
     product: Product
-    context: ValidationContext = field(default_factory=ValidationContext)
+    context: ProductContext = field(default_factory=ProductContext)

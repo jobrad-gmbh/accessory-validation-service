@@ -2,8 +2,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.domain.products import Product, ProductOrigin, ProductType
-from app.domain.validation import ValidationContext
+from app.domain.products import Product, ProductContext, ProductOrigin, ProductType
 from app.domain.validation.request import ValidationRequest
 
 
@@ -20,7 +19,7 @@ class AccessoryInput(BaseModel):
     brand: str
     model: str
     price: Decimal = Field(ge=0, allow_inf_nan=False)
-    context: ValidationContext
+    context: ProductContext
     origin: AccessoryOrigin
     color: str | None = None
     size: str | None = None

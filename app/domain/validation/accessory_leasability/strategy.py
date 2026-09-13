@@ -1,9 +1,31 @@
+from dataclasses import replace
+
 from app.shared.decision_strategies.nodes import (
     CriterionNode,
     DecisionNode,
     DecisionStrategy,
     StrategyDecision,
 )
+
+
+def bawu_leasability_strategy() -> DecisionStrategy:
+    """Use the standard rules without the StVZO acceptance check."""
+    standard = standard_leasability_strategy()
+    nodes = dict(standard.nodes)
+    technical_check = nodes["technical_bicycle_component_check"]
+    assert isinstance(technical_check, CriterionNode)
+    nodes[technical_check.id] = replace(
+        technical_check,
+        on_no="functional_unit_check",
+        on_unknown="functional_unit_check",
+    )
+    del nodes["stvzo_equipment_check"]
+    return DecisionStrategy(
+        id="bawu_accessory_leasability",
+        version=standard.version,
+        entry_node_id=standard.entry_node_id,
+        nodes=nodes,
+    )
 
 
 def standard_leasability_strategy() -> DecisionStrategy:

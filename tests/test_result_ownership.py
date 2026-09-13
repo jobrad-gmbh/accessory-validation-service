@@ -4,7 +4,7 @@ from random import Random
 import pytest
 
 from app.adapters.web.schemas import AccessoryInput
-from app.domain.products import Product, ProductOrigin, ProductType
+from app.domain.products import Product, ProductContext, ProductOrigin, ProductType
 from app.domain.validation import (
     ProductValidationService,
     SimpleValidation,
@@ -175,7 +175,7 @@ def test_strategy_validation_always_captures_its_evaluation():
     assert len(execution.strategy_evaluations) == 1
     strategy_evaluation = execution.strategy_evaluations[0]
     assert strategy_evaluation.strategy_id == policy.id
-    assert strategy_evaluation.strategy_version == "2"
+    assert strategy_evaluation.strategy_version == policy.version
     assert strategy_evaluation.trace[0].criterion_id == "explicitly_not_leasable_type"
     assert all(
         step.result.evidence["random_test_decision"]
@@ -205,7 +205,10 @@ def test_strategy_validation_always_captures_its_evaluation():
             StrategyDecision.ACCEPT,
         ),
         ({"stvzo_equipment": CriterionAnswer.YES}, StrategyDecision.ACCEPT),
-        ({"functional_unit_with_bicycle": CriterionAnswer.YES}, StrategyDecision.ACCEPT),
+        (
+            {"functional_unit_with_bicycle": CriterionAnswer.YES},
+            StrategyDecision.ACCEPT,
+        ),
         ({"installable_on_bicycle": CriterionAnswer.YES}, StrategyDecision.ACCEPT),
         ({}, StrategyDecision.REJECT),
     ],
@@ -246,3 +249,71 @@ def test_leasability_strategy_routes_each_business_rule(answers, expected):
     )
 
     assert evaluation.decision is expected
+
+
+@pytest.mark.parametrize("is_bawu", [False, True])
+@pytest.mark.parametrize(
+    "later_acceptance", [None, "functional_unit_with_bicycle", "installable_on_bicycle"]
+)
+def test_context_selects_strategy_and_bawu_skips_stvzo(is_bawu, later_acceptance):
+    calls = []
+
+    class FixedCriterion:
+        def __init__(self, criterion_id):
+            self.id = criterion_id
+
+        async def evaluate(self, request):
+            calls.append(self.id)
+            if is_bawu and self.id == "stvzo_equipment":
+                pytest.fail("Bawu must not execute the StVZO criterion")
+            answer = (
+                CriterionAnswer.YES
+                if self.id in ("stvzo_equipment", later_acceptance)
+                else CriterionAnswer.NO
+            )
+            return CriterionResult(answer, "TEST", "Deterministic test answer.")
+
+    ids = {
+        node.criterion_id
+        for node in standard_leasability_strategy().nodes.values()
+        if isinstance(node, CriterionNode)
+    }
+    validation = AccessoryLeasabilityValidation(
+        [FixedCriterion(value) for value in ids]
+    )
+    request = ValidationRequest(
+        product=product(), context=ProductContext(is_bawu_order=is_bawu)
+    )
+    execution = asyncio.run(validation.validate(request))
+    evaluation = execution.strategy_evaluations[0]
+
+    assert evaluation.strategy_id == (
+        "bawu_accessory_leasability" if is_bawu else "standard_accessory_leasability"
+    )
+    assert execution.result.status is (
+        ValidationStatus.REJECTED
+        if is_bawu and later_acceptance is None
+        else ValidationStatus.PASSED
+    )
+    assert [step.criterion_id for step in evaluation.trace] == calls
+    assert ("stvzo_equipment" in calls) is (not is_bawu)
+    if is_bawu:
+        assert "functional_unit_with_bicycle" in calls
+
+
+def test_api_preserves_product_context_and_defaults_to_non_bawu():
+    payload = {
+        "brand": "Example",
+        "model": "Rack",
+        "price": "49.99",
+        "origin": {"source": "odoo", "external_ref": "ACC-42"},
+        "context": {"is_bawu_order": True},
+    }
+    assert AccessoryInput.model_validate(payload).to_domain().context == ProductContext(
+        is_bawu_order=True
+    )
+    payload["context"] = {}
+    assert (
+        AccessoryInput.model_validate(payload).to_domain().context == ProductContext()
+    )
+    assert ValidationRequest(product=product()).context.is_bawu_order is False

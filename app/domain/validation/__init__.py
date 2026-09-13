@@ -1,4 +1,4 @@
-from app.domain.validation.request import ValidationContext, ValidationRequest
+from app.domain.validation.request import ValidationRequest
 from app.domain.validation.results import (
     ReportStatus,
     ValidationExecution,
@@ -19,7 +19,6 @@ __all__ = [
     "SimpleValidation",
     "StrategyBasedValidation",
     "Validation",
-    "ValidationContext",
     "ValidationExecution",
     "ValidationReport",
     "ValidationRequest",
