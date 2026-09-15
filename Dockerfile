@@ -1,43 +1,25 @@
-FROM python:${{ values.pythonVersion }}-alpine3.22 AS builder
+FROM python:3.13-alpine3.22
 
-{%- if 'kafka' in values.features %}
-RUN apk add --no-cache \
-    librdkafka-dev \
-    build-base
-{%- endif %}
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /bin/
 
-RUN pip install poetry==2.1.1
+WORKDIR /service
 
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_IN_PROJECT=1 \
-    POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+ENV PATH="/service/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-WORKDIR /app/
-
-COPY pyproject.toml poetry.lock ./
-
-RUN --mount=type=cache,target=$POETRY_CACHE_DIR poetry install --only main --no-root
-
-FROM python:${{ values.pythonVersion }}-alpine3.22 AS runtime
-
-WORKDIR /service/
-
-ENV VIRTUAL_ENV=/app/.venv \
-    PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
-
-COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
 COPY ./app ./app
-COPY ./alembic ./alembic
-COPY ./alembic.ini .
-COPY ./entrypoint.sh .
-RUN chmod +x ./entrypoint.sh
+COPY ./entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh \
+    && addgroup -S appgroup \
+    && adduser -S appuser -G appgroup
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
+EXPOSE 8000
 
-EXPOSE ${{ values.port }}
-
-ENTRYPOINT [ "./entrypoint.sh" ]
+ENTRYPOINT ["./entrypoint.sh"]

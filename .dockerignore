@@ -1,7 +1,7 @@
 **/*
 
 !app/
-!poetry.lock
+!uv.lock
 !pyproject.toml
 !entrypoint.sh
 

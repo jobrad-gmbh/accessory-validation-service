@@ -1,54 +1,51 @@
-# ${{ values.projectName }}
+# Accessory Validator
 
-${{ values.projectDescription }}
+FastAPI service that runs the configured accessory validations and returns one
+report containing their business results.
 
-## Quick Start
+## Run locally
 
 ```bash
-# Install dependencies, setup environment
-make setup
-
-# Start development server
-make start
-
-# Run tests
-make test
+uv sync --locked
+uv run python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## API Endpoints
+The API documentation is available at <http://127.0.0.1:8000/docs>.
 
-- `GET /` - Welcome message
-- `GET /health` - Health check
-{%- if 'postgresql' in values.features %}
-- `GET /api/v1/bikes` - List bikes
-- `POST /api/v1/bikes` - Create bike
-{%- endif %}
-{%- if 'opentelemetry' in values.features %}
-- `GET /metrics` - Prometheus metrics
-{%- endif %}
+## Validate an accessory
 
-## Architecture
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "brand": "Example",
+    "model": "Rear rack",
+    "price": "49.99",
+    "origin": {
+      "source": "odoo",
+      "external_ref": "ACC-42"
+    },
+    "context": {
+      "is_bawu_order": false
+    }
+  }'
+```
 
-FastAPI service using hexagonal architecture:
-- `app/domain/` - Business logic
-- `app/adapters/` - External interfaces (web, database, messaging)
-- `app/config/` - Configuration and logging
+`context` is optional and defaults to a non-BAWU order.
 
-## Tech Stack
+## Other endpoints
 
-- **Framework:** FastAPI + Uvicorn
-- **Python:** ${{ values.pythonVersion }}
-{%- if 'postgresql' in values.features %}
-- **Database:** PostgreSQL + SQLAlchemy + Alembic
-{%- endif %}
-{%- if 'kafka' in values.features %}
-- **Messaging:** Apache Kafka
-{%- endif %}
-{%- if 'opentelemetry' in values.features %}
-- **Monitoring:** Prometheus + OpenTelemetry
-{%- endif %}
-- **Deployment:** Nomad + Docker
+- `GET /` returns the service name.
+- `GET /health` returns service health.
 
 ## Development
 
-Available commands via `make help`
+```bash
+uv run python -m pytest
+uv run python -m ruff check app tests
+uv run python -m mypy app
+```
+
+The current leasability criteria return placeholder random answers. The API and
+aggregation behavior are ready to exercise while each criterion receives its
+real implementation.
