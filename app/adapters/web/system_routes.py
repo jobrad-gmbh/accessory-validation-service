@@ -1,9 +1,6 @@
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter, status
-from app.config.logging import get_logger
-
-logger = get_logger(__name__)
 
 
 system_router = APIRouter(
@@ -12,17 +9,15 @@ system_router = APIRouter(
 
 
 @system_router.get("/", status_code=status.HTTP_200_OK)
-async def root() -> Dict[str, str]:
-    return {"message": "Hello from ${{ values.projectName }}"}
+async def root() -> dict[str, str]:
+    return {"message": "Accessory Validator"}
 
 
 @system_router.get("/health", status_code=status.HTTP_200_OK)
-async def health_check() -> Dict[str, Any]:
-    health_status: Dict[str, Any] = {
+async def health_check() -> dict[str, Any]:
+    health_status: dict[str, Any] = {
         "status": "healthy",
-        "service": "${{ values.projectNameKebab }}",
+        "service": "accessory-validator",
         "version": "1.0.0",
     }
-    # TODO Consider checking other system components like database, kafka, etc.
-
     return health_status

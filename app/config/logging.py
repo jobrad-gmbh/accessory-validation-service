@@ -16,7 +16,7 @@ def setup_logging(
         format_string: The log format string to use. If None, uses a default format.
     """
     log_level = level or settings.LOG_LEVEL or "INFO"
-    log_format = format_string or settings.LOG_FORMAT
+    log_format = format_string or settings.LOG_FORMAT_STRING
 
     formatter = logging.Formatter(log_format)
     console_handler = logging.StreamHandler(sys.stdout)
@@ -29,7 +29,7 @@ def setup_logging(
     root_logger.addHandler(console_handler)
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
-    app_logger = logging.getLogger("test_service_python")
+    app_logger = logging.getLogger("accessory_validator")
     app_logger.setLevel(getattr(logging, log_level.upper()))
 
     # configure external libraries to use our format
@@ -46,10 +46,10 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
     """Get a logger with the given name.
 
     Args:
-        name: The name for the logger. If None, uses "test_service_python".
+        name: The name for the logger. If None, uses "accessory_validator".
 
     Returns:
         A configured logger instance.
     """
-    logger_name = f"test_service_python.{name}" if name else "test_service_python"
+    logger_name = f"accessory_validator.{name}" if name else "accessory_validator"
     return logging.getLogger(logger_name)

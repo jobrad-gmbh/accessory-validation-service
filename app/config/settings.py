@@ -1,49 +1,26 @@
-from pydantic import Field, HttpUrl, SecretStr, computed_field
+from pydantic import Field, HttpUrl, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-{%- if 'postgresql' in values.features %}
-from pydantic.networks import PostgresDsn
-{%- endif %}
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
+
     API_V1_BASE_URL: str = "/api/v1"
 
-    LLM_BASE_URL: HttpUrl
-    LLM_API_KEY: SecretStr
-    LLM_MODEL: str = Field(min_length=1)
+    # LLM support is optional for validations that do not use it. A client must
+    # still receive explicit values when it is constructed.
+    LLM_BASE_URL: HttpUrl | None = None
+    LLM_API_KEY: SecretStr | None = None
+    LLM_MODEL: str | None = Field(default=None, min_length=1)
     LLM_TIMEOUT_SECONDS: float = Field(default=60, gt=0, allow_inf_nan=False)
 
-{%- if 'postgresql' in values.features %}
-    DATABASE_HOST: str = "localhost"
-    DATABASE_USER: str = "postgres"
-    DATABASE_PASSWORD: str = "postgres"
-    DATABASE_PORT: int = 5432
-    DATABASE_NAME: str = "${{ values.projectNameKebab }}"
-{%- endif %}
-
-{%- if 'kafka' in values.features %}
-    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
-{%- endif %}
-
     APP_ENVIRONMENT: str = "development"
-
     LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "%(levelname)s  [%(name)s] %(message)s"
-
-{%- if 'postgresql' in values.features %}
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def SQLALCHEMY_DATABASE_URI(self) -> str:
-        return str(
-            PostgresDsn(
-                f"postgresql+psycopg://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}/{self.DATABASE_NAME}"
-            )
-        )
-{%- endif %}
+    LOG_FORMAT_STRING: str = "%(levelname)s  [%(name)s] %(message)s"
 
 
 settings = Settings()
