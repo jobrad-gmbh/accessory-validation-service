@@ -10,7 +10,6 @@ from app.domain.validation import (
     ValidationReport,
     ValidationStatus,
 )
-from app.domain.validation.results import EvidenceValue
 from app.domain.validation.request import ValidationRequest
 
 
@@ -60,9 +59,7 @@ class ValidationResponse(BaseModel):
     id: UUID
     validation_id: str
     status: ValidationStatus
-    reason_code: str
     details: str
-    evidence: dict[str, EvidenceValue]
     executed_at: datetime
 
 
@@ -83,9 +80,7 @@ class ValidationReportResponse(BaseModel):
                     id=execution.id,
                     validation_id=execution.validation_id,
                     status=execution.result.status,
-                    reason_code=execution.result.reason_code,
                     details=execution.result.details,
-                    evidence=dict(execution.result.evidence),
                     executed_at=execution.executed_at,
                 )
                 for execution in report.validations

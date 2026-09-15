@@ -17,6 +17,5 @@ class StrategyEvaluation:
     strategy_version: str
     decision_node_id: str
     decision: StrategyDecision
-    reason_code: str
     details: str
     trace: tuple[TraceStep, ...]

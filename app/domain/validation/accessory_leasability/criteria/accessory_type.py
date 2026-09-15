@@ -14,9 +14,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
         answer = self._randomizer.choice((CriterionAnswer.YES, CriterionAnswer.NO))
         return CriterionResult(
             answer,
-            f"RANDOM_{self.id.upper()}_{answer.value}",
             f"Random test answer for {self.id}: {answer.value}.",
-            {"random_test_decision": True},
         )
 
 
@@ -30,7 +28,5 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
         answer = self._randomizer.choice((CriterionAnswer.YES, CriterionAnswer.NO))
         return CriterionResult(
             answer,
-            f"RANDOM_{self.id.upper()}_{answer.value}",
             f"Random test answer for {self.id}: {answer.value}.",
-            {"random_test_decision": True},
         )

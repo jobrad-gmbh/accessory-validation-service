@@ -5,11 +5,7 @@ from app.domain.validation.accessory_leasability.strategy import (
     standard_leasability_strategy,
 )
 from app.domain.validation.request import ValidationRequest
-from app.domain.validation.results import (
-    EvidenceValue,
-    ValidationResult,
-    ValidationStatus,
-)
+from app.domain.validation.results import ValidationResult, ValidationStatus
 from app.domain.validation.validation import StrategyBasedValidation
 from app.shared.decision_strategies.contracts import Criterion
 from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
@@ -54,14 +50,5 @@ class AccessoryLeasabilityValidation(StrategyBasedValidation):
         }[evaluation.decision]
         return ValidationResult(
             status=status,
-            reason_code=evaluation.reason_code,
             details=evaluation.details,
-            evidence=self._business_evidence(evaluation),
         )
-
-    @staticmethod
-    def _business_evidence(evaluation: StrategyEvaluation) -> dict[str, EvidenceValue]:
-        evidence: dict[str, EvidenceValue] = {}
-        for step in evaluation.trace:
-            evidence.update(step.result.evidence)
-        return evidence

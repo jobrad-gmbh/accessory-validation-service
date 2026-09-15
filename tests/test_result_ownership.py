@@ -48,7 +48,6 @@ def product(*, external_ref: str = "ACC-42", category: str | None = None) -> Pro
 def validation_result():
     return ValidationResult(
         status=ValidationStatus.PASSED,
-        reason_code="ALLOWED",
         details="Accessory is allowed.",
     )
 
@@ -59,7 +58,6 @@ def evaluation() -> StrategyEvaluation:
         strategy_version="2",
         decision_node_id="allowed",
         decision=StrategyDecision.ACCEPT,
-        reason_code="ALLOWED",
         details="Accessory is allowed.",
         trace=(),
     )
@@ -177,10 +175,7 @@ def test_strategy_validation_always_captures_its_evaluation():
     assert strategy_evaluation.strategy_id == policy.id
     assert strategy_evaluation.strategy_version == policy.version
     assert strategy_evaluation.trace[0].criterion_id == "explicitly_not_leasable_type"
-    assert all(
-        step.result.evidence["random_test_decision"]
-        for step in strategy_evaluation.trace
-    )
+    assert all(step.result.details for step in strategy_evaluation.trace)
 
 
 @pytest.mark.parametrize(
@@ -224,7 +219,6 @@ def test_leasability_strategy_routes_each_business_rule(answers, expected):
         async def evaluate(self, request):
             return CriterionResult(
                 self._answer,
-                "FIXED_TEST_ANSWER",
                 "Fixed answer used to verify strategy routing.",
             )
 
@@ -271,7 +265,7 @@ def test_context_selects_strategy_and_bawu_skips_stvzo(is_bawu, later_acceptance
                 if self.id in ("stvzo_equipment", later_acceptance)
                 else CriterionAnswer.NO
             )
-            return CriterionResult(answer, "TEST", "Deterministic test answer.")
+            return CriterionResult(answer, "Deterministic test answer.")
 
     ids = {
         node.criterion_id

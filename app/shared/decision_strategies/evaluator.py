@@ -45,7 +45,6 @@ class DecisionTreeEvaluator(Generic[InputT]):
             strategy.version,
             decision_node.id,
             decision_node.decision,
-            decision_node.reason_code,
             decision_node.details,
             tuple(trace),
         )

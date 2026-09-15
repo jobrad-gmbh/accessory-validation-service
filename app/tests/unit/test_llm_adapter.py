@@ -20,7 +20,7 @@ class Classification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: Literal["YES", "NO", "UNKNOWN"]
-    reason_code: str
+    explanation: str
 
 
 def client(http: httpx.AsyncClient) -> LiteLLMClient:
@@ -58,7 +58,7 @@ async def test_sends_request_and_returns_validated_content() -> None:
         captured_request = request
         return httpx.Response(
             200,
-            json=completion('{"answer":"YES","reason_code":"MATCH"}'),
+            json=completion('{"answer":"YES","explanation":"It matches."}'),
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
@@ -69,7 +69,7 @@ async def test_sends_request_and_returns_validated_content() -> None:
             response_type=Classification,
         )
 
-    assert result == Classification(answer="YES", reason_code="MATCH")
+    assert result == Classification(answer="YES", explanation="It matches.")
     assert captured_request is not None
     assert str(captured_request.url) == "https://llm.example.test/v1/chat/completions"
     assert captured_request.headers["Authorization"] == "Bearer secret-token"
@@ -88,7 +88,7 @@ async def test_accepts_per_request_model_and_timeout_overrides() -> None:
         captured_body.update(json.loads(request.content))
         return httpx.Response(
             200,
-            json=completion('{"answer":"NO","reason_code":"NO_MATCH"}'),
+            json=completion('{"answer":"NO","explanation":"It does not match."}'),
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
@@ -164,7 +164,7 @@ async def test_enforces_request_timeout() -> None:
         ),
         (json.dumps(completion("  ")).encode(), "empty content"),
         (
-            json.dumps(completion('{"answer":"MAYBE","reason_code":"?"}')).encode(),
+            json.dumps(completion('{"answer":"MAYBE","explanation":"Unclear."}')).encode(),
             "invalid content",
         ),
     ],

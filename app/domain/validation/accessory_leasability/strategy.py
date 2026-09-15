@@ -93,13 +93,11 @@ def standard_leasability_strategy() -> DecisionStrategy:
             "leasable": DecisionNode(
                 "leasable",
                 StrategyDecision.ACCEPT,
-                "ACCESSORY_LEASABLE",
                 "El accesorio es financiable.",
             ),
             "not_leasable": DecisionNode(
                 "not_leasable",
                 StrategyDecision.REJECT,
-                "ACCESSORY_NOT_LEASABLE",
                 "El accesorio no es financiable.",
             ),
         },

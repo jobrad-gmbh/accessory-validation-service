@@ -33,9 +33,7 @@ def test_validate_accessory_returns_the_domain_report(test_client: TestClient):
             received_requests.append(request)
             return ValidationResult(
                 status=ValidationStatus.PASSED,
-                reason_code="TEST_PASSED",
                 details="The deterministic API test validation passed.",
-                evidence={"source": request.product.origin.source},
             )
 
     app.dependency_overrides[get_validation_service] = lambda: (
@@ -50,8 +48,6 @@ def test_validate_accessory_returns_the_domain_report(test_client: TestClient):
     assert body["status"] == "VALID"
     assert body["validations"][0]["validation_id"] == "test_validation"
     assert body["validations"][0]["status"] == "PASSED"
-    assert body["validations"][0]["reason_code"] == "TEST_PASSED"
-    assert body["validations"][0]["evidence"] == {"source": "odoo"}
     assert received_requests[0].context.is_bawu_order is False
 
 
@@ -65,7 +61,6 @@ def test_validate_accessory_passes_the_supplied_context(test_client: TestClient)
             contexts.append(request.context)
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
-                reason_code="TEST_REJECTED",
                 details="The deterministic API test validation rejected the accessory.",
             )
 

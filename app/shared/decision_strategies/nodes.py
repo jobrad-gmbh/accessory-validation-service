@@ -33,7 +33,6 @@ class CriterionNode:
 class DecisionNode:
     id: str
     decision: StrategyDecision
-    reason_code: str
     details: str
 
 
@@ -71,7 +70,6 @@ class DecisionStrategy:
                         )
             elif (
                 not isinstance(node.decision, StrategyDecision)
-                or not node.reason_code.strip()
                 or not node.details.strip()
             ):
                 raise StrategyConfigurationError(f"Invalid decision at node {node_id}")

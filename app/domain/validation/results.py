@@ -1,15 +1,10 @@
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from types import MappingProxyType
 from uuid import UUID, uuid4
 
 from app.domain.products.product import Product
 from app.shared.decision_strategies.results import StrategyEvaluation
-
-EvidenceValue = str | bool | int | None
-
 
 class ValidationStatus(StrEnum):
     PASSED = "PASSED"
@@ -28,18 +23,13 @@ class ValidationResult:
     """The business answer produced by a validation."""
 
     status: ValidationStatus
-    reason_code: str
     details: str
-    evidence: Mapping[str, EvidenceValue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ValidationStatus):
             raise ValueError("Validation result requires a ValidationStatus")
-        for name in ("reason_code", "details"):
-            value = getattr(self, name)
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"Validation result {name} cannot be blank")
-        object.__setattr__(self, "evidence", MappingProxyType(dict(self.evidence)))
+        if not isinstance(self.details, str) or not self.details.strip():
+            raise ValueError("Validation result details cannot be blank")
 
 
 @dataclass(frozen=True, kw_only=True)
