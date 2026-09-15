@@ -5,11 +5,10 @@ from typing import Literal
 
 import httpx
 import pytest
-from pydantic import BaseModel, ConfigDict, HttpUrl, SecretStr, ValidationError
+from pydantic import BaseModel, ConfigDict, HttpUrl, SecretStr
 
 from app.adapters.llm import (
     LiteLLMClient,
-    LiteLLMSettings,
     LlmError,
     LlmHttpError,
     LlmResponseError,
@@ -24,12 +23,13 @@ class Classification(BaseModel):
     reason_code: str
 
 
-def settings() -> LiteLLMSettings:
-    return LiteLLMSettings(
+def client(http: httpx.AsyncClient) -> LiteLLMClient:
+    return LiteLLMClient(
         base_url=HttpUrl("https://llm.example.test/v1"),
         api_key=SecretStr("secret-token"),
         model="default-model",
         timeout_seconds=5,
+        http_client=http,
     )
 
 
@@ -62,8 +62,8 @@ async def test_sends_request_and_returns_validated_content() -> None:
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
-        result = await client.generate(
+        llm = client(http)
+        result = await llm.generate(
             instructions="Classify the product.",
             input="A bicycle bell",
             response_type=Classification,
@@ -92,8 +92,8 @@ async def test_accepts_per_request_model_and_timeout_overrides() -> None:
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
-        await client.generate(
+        llm = client(http)
+        await llm.generate(
             instructions="Classify.",
             input="A coffee mug",
             response_type=Classification,
@@ -111,9 +111,9 @@ async def test_exposes_unsuccessful_http_status(status_code: int) -> None:
         return httpx.Response(status_code, json={"error": "private provider details"})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
+        llm = client(http)
         with pytest.raises(LlmHttpError) as raised:
-            await client.generate(
+            await llm.generate(
                 instructions="Classify.", input="product", response_type=Classification
             )
 
@@ -127,9 +127,9 @@ async def test_handles_connection_errors() -> None:
         raise httpx.ConnectError("private connection details", request=request)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
+        llm = client(http)
         with pytest.raises(LlmError, match="Could not connect"):
-            await client.generate(
+            await llm.generate(
                 instructions="Classify.", input="product", response_type=Classification
             )
 
@@ -141,9 +141,9 @@ async def test_enforces_request_timeout() -> None:
         return httpx.Response(200)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
+        llm = client(http)
         with pytest.raises(LlmTimeoutError, match="timed out"):
-            await client.generate(
+            await llm.generate(
                 instructions="Classify.",
                 input="product",
                 response_type=Classification,
@@ -174,51 +174,20 @@ async def test_rejects_unusable_responses(response_body: bytes, message: str) ->
         return httpx.Response(200, content=response_body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        client = LiteLLMClient(settings(), http)
+        llm = client(http)
         with pytest.raises(LlmResponseError, match=message):
-            await client.generate(
+            await llm.generate(
                 instructions="Classify.", input="product", response_type=Classification
             )
-
-
-def test_loads_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example.test/v1")
-    monkeypatch.setenv("LLM_API_KEY", "top-secret")
-    monkeypatch.setenv("LLM_MODEL", "configured-model")
-    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "12.5")
-
-    configured = LiteLLMSettings()  # type: ignore[call-arg]
-
-    assert str(configured.base_url) == "https://gateway.example.test/v1"
-    assert configured.model == "configured-model"
-    assert configured.timeout_seconds == 12.5
-    assert "top-secret" not in repr(configured)
-
-
-def test_requires_a_configured_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("LLM_BASE_URL", raising=False)
-
-    with pytest.raises(ValidationError, match="base_url"):
-        LiteLLMSettings(model="model", _env_file=None)  # type: ignore[call-arg]
-
-
-@pytest.mark.parametrize("timeout", [0, -1, math.inf, math.nan])
-def test_rejects_invalid_default_timeout(timeout: float) -> None:
-    with pytest.raises(ValidationError):
-        LiteLLMSettings(
-            base_url=HttpUrl("https://llm.example.test/v1"),
-            model="model",
-            timeout_seconds=timeout,
-        )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("timeout", [0, -1, math.inf, math.nan])
 async def test_rejects_invalid_request_timeout(timeout: float) -> None:
     async with httpx.AsyncClient() as http:
-        client = LiteLLMClient(settings(), http)
+        llm = client(http)
         with pytest.raises(ValueError, match="finite and positive"):
-            await client.generate(
+            await llm.generate(
                 instructions="Classify.",
                 input="product",
                 response_type=Classification,

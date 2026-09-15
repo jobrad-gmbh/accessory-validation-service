@@ -1,4 +1,4 @@
-from pydantic import computed_field
+from pydantic import Field, HttpUrl, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 {%- if 'postgresql' in values.features %}
 from pydantic.networks import PostgresDsn
@@ -11,6 +11,11 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
     API_V1_BASE_URL: str = "/api/v1"
+
+    LLM_BASE_URL: HttpUrl
+    LLM_API_KEY: SecretStr
+    LLM_MODEL: str = Field(min_length=1)
+    LLM_TIMEOUT_SECONDS: float = Field(default=60, gt=0, allow_inf_nan=False)
 
 {%- if 'postgresql' in values.features %}
     DATABASE_HOST: str = "localhost"

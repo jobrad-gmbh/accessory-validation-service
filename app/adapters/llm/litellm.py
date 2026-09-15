@@ -4,9 +4,8 @@ import math
 from typing import TypeVar
 
 import httpx
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, HttpUrl, SecretStr, ValidationError
 
-from app.adapters.llm.config import LiteLLMSettings
 from app.adapters.llm.errors import (
     LlmError,
     LlmHttpError,
@@ -42,9 +41,18 @@ class LiteLLMClient:
     """Call a LiteLLM Proxy through its chat-completions endpoint."""
 
     def __init__(
-        self, settings: LiteLLMSettings, http_client: httpx.AsyncClient
+        self,
+        *,
+        base_url: HttpUrl,
+        api_key: SecretStr,
+        model: str,
+        timeout_seconds: float,
+        http_client: httpx.AsyncClient,
     ) -> None:
-        self._settings = settings
+        self._base_url = base_url
+        self._api_key = api_key
+        self._model = model
+        self._timeout_seconds = timeout_seconds
         self._http_client = http_client
 
     async def generate(
@@ -56,15 +64,11 @@ class LiteLLMClient:
         model: str | None = None,
         timeout_seconds: float | None = None,
     ) -> ResponseT:
-        selected_model = self._settings.model if model is None else model
+        selected_model = self._model if model is None else model
         if not selected_model.strip():
             raise ValueError("LLM model must not be blank")
 
-        timeout = (
-            self._settings.timeout_seconds
-            if timeout_seconds is None
-            else timeout_seconds
-        )
+        timeout = self._timeout_seconds if timeout_seconds is None else timeout_seconds
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("LLM timeout must be finite and positive")
 
@@ -85,11 +89,11 @@ class LiteLLMClient:
             "response_format": {"type": "json_object"},
         }
         headers = {}
-        api_key = self._settings.api_key.get_secret_value()
+        api_key = self._api_key.get_secret_value()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        url = f"{str(self._settings.base_url).rstrip('/')}/chat/completions"
+        url = f"{str(self._base_url).rstrip('/')}/chat/completions"
         try:
             async with asyncio.timeout(timeout):
                 response = await self._http_client.post(
