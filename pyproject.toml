@@ -11,6 +11,7 @@ fastapi = "0.116.1"
 uvicorn = "0.35.0"
 pydantic = "2.11.7"
 pydantic-settings = "2.10.1"
+httpx = "0.28.1"
 {%- if 'postgresql' in values.features %}
 sqlalchemy = "2.0.41"
 psycopg = {extras = ["binary"], version = "3.2.9"}
@@ -29,7 +30,6 @@ ruff = "0.12.3"
 mypy = "1.16.1"
 pre-commit = "4.2.0"
 pytest = "8.4.1"
-httpx = "0.28.1"
 pytest-mypy = "1.0.1"
 testcontainers = {version = "4.10.0", extras = ["postgres", "kafka"]}
 pytest-asyncio = "0.25.0"
