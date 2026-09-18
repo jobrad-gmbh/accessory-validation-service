@@ -32,6 +32,8 @@ class AccessoryInput(BaseModel):
     price: Decimal = Field(ge=0, allow_inf_nan=False)
     context: ProductContext = Field(default_factory=ProductContext)
     origin: AccessoryOrigin
+    year: int | None = None
+    category: str | None = None
     color: str | None = None
     size: str | None = None
 
@@ -42,6 +44,8 @@ class AccessoryInput(BaseModel):
                 brand=self.brand,
                 model=self.model,
                 price=self.price,
+                year=self.year,
+                category=self.category,
                 color=self.color,
                 size=self.size,
                 origin=ProductOrigin(

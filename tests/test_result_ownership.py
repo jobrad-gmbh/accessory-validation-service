@@ -76,6 +76,8 @@ def test_accessory_input_maps_origin_and_creates_a_new_product():
         {
             "brand": "Example",
             "model": "Rack",
+            "year": 2026,
+            "category": "transport",
             "price": "49.99",
             "context": {},
             "origin": {"source": "odoo", "external_ref": "ACC-42"},
@@ -87,6 +89,8 @@ def test_accessory_input_maps_origin_and_creates_a_new_product():
 
     assert first.id != second.id
     assert first.origin == ProductOrigin(source="odoo", external_ref="ACC-42")
+    assert first.year == 2026
+    assert first.category == "transport"
 
 
 def test_validation_execution_owns_its_result_and_strategy_evaluations():
