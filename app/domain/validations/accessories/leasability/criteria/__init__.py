@@ -1,22 +1,18 @@
-from app.domain.validation.accessory_leasability.criteria import (
+from app.domain.validations.accessories.leasability.criteria.accessory_type import (
     ExplicitlyLeasableAccessoryTypeCriterion,
     ExplicitlyNotLeasableAccessoryTypeCriterion,
+)
+from app.domain.validations.accessories.leasability.criteria.bicycle_relationship import (
     FunctionalUnitWithBicycleCriterion,
     InstallableOnBicycleCriterion,
-    SpecialRulesCriterion,
     StvzoEquipmentCriterion,
     TechnicalBicycleComponentCriterion,
 )
-from app.domain.validation.accessory_leasability.strategy import (
-    bawu_leasability_strategy,
-    standard_leasability_strategy,
-)
-from app.domain.validation.accessory_leasability.validation import (
-    AccessoryLeasabilityValidation,
+from app.domain.validations.accessories.leasability.criteria.special_rules import (
+    SpecialRulesCriterion,
 )
 
 __all__ = [
-    "AccessoryLeasabilityValidation",
     "ExplicitlyLeasableAccessoryTypeCriterion",
     "ExplicitlyNotLeasableAccessoryTypeCriterion",
     "FunctionalUnitWithBicycleCriterion",
@@ -24,6 +20,4 @@ __all__ = [
     "SpecialRulesCriterion",
     "StvzoEquipmentCriterion",
     "TechnicalBicycleComponentCriterion",
-    "standard_leasability_strategy",
-    "bawu_leasability_strategy",
 ]

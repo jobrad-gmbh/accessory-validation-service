@@ -4,15 +4,28 @@ from random import Random
 import pytest
 
 from app.adapters.web.schemas import AccessoryInput
-from app.domain.products import Product, ProductContext, ProductOrigin, ProductType
+from app.domain.errors import (
+    ValidationExecutionError,
+)
+from app.domain.product import (
+    Product,
+    ProductContext,
+    ProductOrigin,
+    ProductType,
+)
 from app.domain.validation import (
-    ProductValidationService,
     SimpleValidation,
+    ValidationRequest,
+)
+from app.domain.validation_results import (
     ValidationExecution,
     ValidationResult,
     ValidationStatus,
 )
-from app.domain.validation.accessory_leasability.criteria import (
+from app.domain.validation_service import (
+    ProductValidationService,
+)
+from app.domain.validations.accessories.leasability.criteria import (
     ExplicitlyLeasableAccessoryTypeCriterion,
     ExplicitlyNotLeasableAccessoryTypeCriterion,
     FunctionalUnitWithBicycleCriterion,
@@ -21,14 +34,12 @@ from app.domain.validation.accessory_leasability.criteria import (
     StvzoEquipmentCriterion,
     TechnicalBicycleComponentCriterion,
 )
-from app.domain.validation.accessory_leasability.strategy import (
+from app.domain.validations.accessories.leasability.strategies import (
     standard_leasability_strategy,
 )
-from app.domain.validation.accessory_leasability.validation import (
+from app.domain.validations.accessories.leasability.validation import (
     AccessoryLeasabilityValidation,
 )
-from app.domain.validation.errors import ValidationExecutionError
-from app.domain.validation.request import ValidationRequest
 from app.shared.decision_strategies.answers import CriterionAnswer, CriterionResult
 from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
 from app.shared.decision_strategies.nodes import CriterionNode, StrategyDecision

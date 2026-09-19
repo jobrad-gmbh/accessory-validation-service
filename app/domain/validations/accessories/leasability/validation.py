@@ -1,12 +1,17 @@
 from collections.abc import Sequence
 
-from app.domain.validation.accessory_leasability.strategy import (
+from app.domain.validation import (
+    StrategyBasedValidation,
+    ValidationRequest,
+)
+from app.domain.validation_results import (
+    ValidationResult,
+    ValidationStatus,
+)
+from app.domain.validations.accessories.leasability.strategies import (
     bawu_leasability_strategy,
     standard_leasability_strategy,
 )
-from app.domain.validation.request import ValidationRequest
-from app.domain.validation.results import ValidationResult, ValidationStatus
-from app.domain.validation.validation import StrategyBasedValidation
 from app.shared.decision_strategies.contracts import Criterion
 from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
 from app.shared.decision_strategies.nodes import StrategyDecision

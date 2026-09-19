@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Protocol, final
 
-from app.domain.validation.errors import (
+from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
 )
-from app.domain.validation.request import ValidationRequest
-from app.domain.validation.results import ValidationExecution, ValidationResult
+from app.domain.product import Product, ProductContext
+from app.domain.validation_results import (
+    ValidationExecution,
+    ValidationResult,
+)
 from app.shared.decision_strategies.contracts import StrategySelector
 from app.shared.decision_strategies.errors import (
     StrategyConfigurationError,
@@ -15,6 +19,18 @@ from app.shared.decision_strategies.errors import (
 )
 from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
 from app.shared.decision_strategies.results import StrategyEvaluation
+
+
+@dataclass(frozen=True)
+class ValidationRequest:
+    """Submitted product and business context shared by the configured validations.
+
+    Resolved information is obtained by the validation or criterion that needs it;
+    it must not replace the submitted product in this request.
+    """
+
+    product: Product
+    context: ProductContext = field(default_factory=ProductContext)
 
 
 class Validation(Protocol):

@@ -3,13 +3,17 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from app.adapters.web.dependencies import get_validation_service
-from app.main import app
 from app.domain.validation import (
-    ProductValidationService,
     SimpleValidation,
+)
+from app.domain.validation_results import (
     ValidationResult,
     ValidationStatus,
 )
+from app.domain.validation_service import (
+    ProductValidationService,
+)
+from app.main import app
 
 
 def payload(**overrides):

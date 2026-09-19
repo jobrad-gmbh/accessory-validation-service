@@ -1,14 +1,19 @@
 from collections.abc import Sequence
 
-from app.domain.validation.errors import ValidationConfigurationError, ValidationExecutionError
-from app.domain.validation.request import ValidationRequest
-from app.domain.validation.results import (
+from app.domain.errors import (
+    ValidationConfigurationError,
+    ValidationExecutionError,
+)
+from app.domain.validation import (
+    Validation,
+    ValidationRequest,
+)
+from app.domain.validation_results import (
     ReportStatus,
     ValidationExecution,
     ValidationReport,
     ValidationStatus,
 )
-from app.domain.validation.validation import Validation
 
 
 class ProductValidationService:

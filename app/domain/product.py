@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Protocol
 from uuid import UUID, uuid4
 
 
@@ -56,3 +57,12 @@ class Product(ProductInput):
     def __post_init__(self) -> None:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("Product created_at must include a timezone")
+
+
+@dataclass(frozen=True, kw_only=True)
+class ResolvedProduct:
+    product: Product
+
+
+class ProductResolver(Protocol):
+    async def resolve(self, product: Product) -> ResolvedProduct: ...

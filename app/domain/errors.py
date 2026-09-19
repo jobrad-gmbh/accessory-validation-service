@@ -4,3 +4,7 @@ class ValidationConfigurationError(ValueError):
 
 class ValidationExecutionError(Exception):
     """A technical failure prevented validation."""
+
+
+class ProductResolutionError(Exception):
+    """A technical failure prevented product resolution."""

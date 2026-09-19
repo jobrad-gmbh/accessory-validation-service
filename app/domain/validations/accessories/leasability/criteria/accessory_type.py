@@ -1,6 +1,8 @@
 from random import Random
 
-from app.domain.validation.request import ValidationRequest
+from app.domain.validation import (
+    ValidationRequest,
+)
 from app.shared.decision_strategies.answers import CriterionAnswer, CriterionResult
 
 

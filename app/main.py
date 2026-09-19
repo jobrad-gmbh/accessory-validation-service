@@ -10,11 +10,10 @@ from app.adapters.web.system_routes import system_router
 from app.adapters.web.validation_routes import validation_router
 from app.config.logging import setup_logging
 from app.config.settings import settings
-from app.domain.validation.errors import (
+from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
 )
-
 
 setup_logging()
 

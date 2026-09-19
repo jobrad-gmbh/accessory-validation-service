@@ -1,16 +1,23 @@
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.products import Product, ProductContext, ProductOrigin, ProductType
+from app.domain.product import (
+    Product,
+    ProductContext,
+    ProductOrigin,
+    ProductType,
+)
 from app.domain.validation import (
+    ValidationRequest,
+)
+from app.domain.validation_results import (
     ReportStatus,
     ValidationReport,
     ValidationStatus,
 )
-from app.domain.validation.request import ValidationRequest
 
 
 class AccessoryOrigin(BaseModel):

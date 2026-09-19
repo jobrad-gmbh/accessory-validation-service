@@ -3,8 +3,11 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from app.domain.products.product import Product
+from app.domain.product import (
+    Product,
+)
 from app.shared.decision_strategies.results import StrategyEvaluation
+
 
 class ValidationStatus(StrEnum):
     PASSED = "PASSED"

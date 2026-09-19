@@ -51,6 +51,55 @@ The current leasability criteria return placeholder random answers. The API and
 aggregation behavior are ready to exercise while each criterion receives its
 real implementation.
 
+## Project structure
+
+The top level separates business behavior (`domain`), external communication
+(`adapters`), configuration (`config`), and application assembly (`main.py`).
+
+```text
+app/
+├── main.py
+├── config/
+├── adapters/
+│   ├── web/
+│   └── llm/
+├── domain/
+│   ├── product.py
+│   ├── validation.py
+│   ├── validation_results.py
+│   ├── validation_service.py
+│   ├── errors.py
+│   └── validations/
+│       └── accessories/
+│           ├── suite.py
+│           └── leasability/
+│               ├── validation.py
+│               ├── strategies.py
+│               └── criteria/
+└── shared/
+    └── decision_strategies/
+```
+
+- `domain/product.py` defines submitted product data, origin, business context,
+  and the existing product-resolution contract.
+- `domain/validation.py` defines the validation request, common interface, and
+  execution helpers. `validation_results.py` owns results, executions, and reports.
+- `domain/validation_service.py` runs the supplied validations and aggregates
+  their results. Business rejection does not stop the suite; technical failure does.
+- `domain/validations/accessories/suite.py` defines which accessory validations
+  run and constructs the suite. Web dependencies obtain the service from here.
+- Each concrete validation owns its criteria and business strategies. Leasability
+  contains both the standard and BAWU strategies.
+- `shared/decision_strategies` evaluates decision trees without knowing about
+  products or accessory policies. Keep generic evaluation mechanics here and
+  business-specific paths alongside their validation.
+
+Add new accessory checks under `domain/validations/accessories` and include them
+in `suite.py`. A small check can be a single module; use a package when it needs
+multiple files. Add another product category only when its validations are needed.
+Domain code must not depend on FastAPI or concrete provider clients; adapters and
+application assembly connect external implementations to business behavior.
+
 ## LLM adapters
 
 Standalone clients live in `app/adapters/llm`; they are not wired into validations.
