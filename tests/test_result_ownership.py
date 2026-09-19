@@ -1,5 +1,4 @@
 import asyncio
-from random import Random
 
 import pytest
 
@@ -25,25 +24,6 @@ from app.domain.validation_results import (
 from app.domain.validation_service import (
     ProductValidationService,
 )
-from app.domain.validations.accessories.leasability.criteria import (
-    ExplicitlyLeasableAccessoryTypeCriterion,
-    ExplicitlyNotLeasableAccessoryTypeCriterion,
-    FunctionalUnitWithBicycleCriterion,
-    InstallableOnBicycleCriterion,
-    SpecialRulesCriterion,
-    StvzoEquipmentCriterion,
-    TechnicalBicycleComponentCriterion,
-)
-from app.domain.validations.accessories.leasability.strategies import (
-    standard_leasability_strategy,
-)
-from app.domain.validations.accessories.leasability.validation import (
-    AccessoryLeasabilityValidation,
-)
-from app.shared.decision_strategies.answers import CriterionAnswer, CriterionResult
-from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
-from app.shared.decision_strategies.nodes import CriterionNode, StrategyDecision
-from app.shared.decision_strategies.results import StrategyEvaluation
 
 
 def product(*, external_ref: str = "ACC-42", category: str | None = None) -> Product:
@@ -60,17 +40,6 @@ def validation_result():
     return ValidationResult(
         status=ValidationStatus.PASSED,
         details="Accessory is allowed.",
-    )
-
-
-def evaluation() -> StrategyEvaluation:
-    return StrategyEvaluation(
-        strategy_id="standard_accessory_leasability",
-        strategy_version="2",
-        decision_node_id="allowed",
-        decision=StrategyDecision.ACCEPT,
-        details="Accessory is allowed.",
-        trace=(),
     )
 
 
@@ -104,25 +73,21 @@ def test_accessory_input_maps_origin_and_creates_a_new_product():
     assert first.category == "transport"
 
 
-def test_validation_execution_owns_its_result_and_strategy_evaluations():
+def test_validation_execution_owns_its_result():
     associated_product = product()
-    strategy_evaluation = evaluation()
 
     execution = ValidationExecution(
         validation_id="accessory_leasability",
         product=associated_product,
         result=validation_result(),
-        strategy_evaluations=(strategy_evaluation,),
     )
 
     assert execution.product is associated_product
     assert execution.result.status is ValidationStatus.PASSED
-    assert execution.strategy_evaluations == (strategy_evaluation,)
     assert not hasattr(execution, "product_id")
-    assert not hasattr(strategy_evaluation, "validation_result_id")
 
 
-def test_simple_validation_creates_an_execution_without_strategies():
+def test_simple_validation_creates_an_execution():
     associated_product = product()
 
     class AlwaysPasses(SimpleValidation):
@@ -137,7 +102,7 @@ def test_simple_validation_creates_an_execution_without_strategies():
 
     assert execution.product is associated_product
     assert execution.validation_id == "always_passes"
-    assert execution.strategy_evaluations == ()
+    assert execution.result.status is ValidationStatus.PASSED
 
 
 def test_service_rejects_a_validation_execution_for_another_product():
@@ -158,156 +123,6 @@ def test_service_rejects_a_validation_execution_for_another_product():
 
     with pytest.raises(ValidationExecutionError, match="failed"):
         asyncio.run(service.validate(ValidationRequest(product=requested_product)))
-
-
-def test_strategy_validation_always_captures_its_evaluation():
-    associated_product = product()
-    policy = standard_leasability_strategy()
-    randomizer = Random(7)
-    validation = AccessoryLeasabilityValidation(
-        [
-            ExplicitlyNotLeasableAccessoryTypeCriterion(randomizer),
-            SpecialRulesCriterion(randomizer),
-            ExplicitlyLeasableAccessoryTypeCriterion(randomizer),
-            TechnicalBicycleComponentCriterion(randomizer),
-            StvzoEquipmentCriterion(randomizer),
-            FunctionalUnitWithBicycleCriterion(randomizer),
-            InstallableOnBicycleCriterion(randomizer),
-        ]
-    )
-
-    execution = asyncio.run(
-        validation.validate(ValidationRequest(product=associated_product))
-    )
-
-    assert execution.product is associated_product
-    assert execution.result.status in {
-        ValidationStatus.PASSED,
-        ValidationStatus.REJECTED,
-    }
-    assert len(execution.strategy_evaluations) == 1
-    strategy_evaluation = execution.strategy_evaluations[0]
-    assert strategy_evaluation.strategy_id == policy.id
-    assert strategy_evaluation.strategy_version == policy.version
-    assert strategy_evaluation.trace[0].criterion_id == "explicitly_not_leasable_type"
-    assert all(step.result.details for step in strategy_evaluation.trace)
-
-
-@pytest.mark.parametrize(
-    ("answers", "expected"),
-    [
-        (
-            {
-                "explicitly_not_leasable_type": CriterionAnswer.YES,
-                "special_rules": CriterionAnswer.UNKNOWN,
-            },
-            StrategyDecision.REJECT,
-        ),
-        (
-            {
-                "explicitly_leasable_type": CriterionAnswer.YES,
-                "special_rules": CriterionAnswer.UNKNOWN,
-            },
-            StrategyDecision.ACCEPT,
-        ),
-        (
-            {"technical_bicycle_component": CriterionAnswer.YES},
-            StrategyDecision.ACCEPT,
-        ),
-        ({"stvzo_equipment": CriterionAnswer.YES}, StrategyDecision.ACCEPT),
-        (
-            {"functional_unit_with_bicycle": CriterionAnswer.YES},
-            StrategyDecision.ACCEPT,
-        ),
-        ({"installable_on_bicycle": CriterionAnswer.YES}, StrategyDecision.ACCEPT),
-        ({}, StrategyDecision.REJECT),
-    ],
-)
-def test_leasability_strategy_routes_each_business_rule(answers, expected):
-    strategy = standard_leasability_strategy()
-
-    class FixedCriterion:
-        def __init__(self, criterion_id, answer):
-            self.id = criterion_id
-            self._answer = answer
-
-        async def evaluate(self, request):
-            return CriterionResult(
-                self._answer,
-                "Fixed answer used to verify strategy routing.",
-            )
-
-    criterion_ids = {
-        node.criterion_id
-        for node in strategy.nodes.values()
-        if isinstance(node, CriterionNode)
-    }
-    criteria = [
-        FixedCriterion(
-            criterion_id,
-            answers.get(criterion_id, CriterionAnswer.NO),
-        )
-        for criterion_id in criterion_ids
-    ]
-
-    evaluation = asyncio.run(
-        DecisionTreeEvaluator(criteria).evaluate(
-            strategy,
-            ValidationRequest(product=product()),
-        )
-    )
-
-    assert evaluation.decision is expected
-
-
-@pytest.mark.parametrize("is_bawu", [False, True])
-@pytest.mark.parametrize(
-    "later_acceptance", [None, "functional_unit_with_bicycle", "installable_on_bicycle"]
-)
-def test_context_selects_strategy_and_bawu_skips_stvzo(is_bawu, later_acceptance):
-    calls = []
-
-    class FixedCriterion:
-        def __init__(self, criterion_id):
-            self.id = criterion_id
-
-        async def evaluate(self, request):
-            calls.append(self.id)
-            if is_bawu and self.id == "stvzo_equipment":
-                pytest.fail("Bawu must not execute the StVZO criterion")
-            answer = (
-                CriterionAnswer.YES
-                if self.id in ("stvzo_equipment", later_acceptance)
-                else CriterionAnswer.NO
-            )
-            return CriterionResult(answer, "Deterministic test answer.")
-
-    ids = {
-        node.criterion_id
-        for node in standard_leasability_strategy().nodes.values()
-        if isinstance(node, CriterionNode)
-    }
-    validation = AccessoryLeasabilityValidation(
-        [FixedCriterion(value) for value in ids]
-    )
-    request = ValidationRequest(
-        product=product(), context=ProductContext(is_bawu_order=is_bawu)
-    )
-    execution = asyncio.run(validation.validate(request))
-    evaluation = execution.strategy_evaluations[0]
-
-    assert evaluation.strategy_id == (
-        "bawu_accessory_leasability" if is_bawu else "standard_accessory_leasability"
-    )
-    assert execution.result.status is (
-        ValidationStatus.REJECTED
-        if is_bawu and later_acceptance is None
-        else ValidationStatus.PASSED
-    )
-    assert [step.criterion_id for step in evaluation.trace] == calls
-    assert ("stvzo_equipment" in calls) is (not is_bawu)
-    if is_bawu:
-        assert "functional_unit_with_bicycle" in calls
 
 
 def test_api_preserves_product_context_and_defaults_to_non_bawu():

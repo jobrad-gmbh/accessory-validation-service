@@ -1,9 +1,9 @@
 from random import Random
 
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation import (
     ValidationRequest,
 )
-from app.shared.decision_strategies.answers import CriterionAnswer, CriterionResult
 
 
 class ExplicitlyNotLeasableAccessoryTypeCriterion:

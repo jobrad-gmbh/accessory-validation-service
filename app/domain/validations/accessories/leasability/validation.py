@@ -1,59 +1,21 @@
-from collections.abc import Sequence
-
-from app.domain.validation import (
-    StrategyBasedValidation,
-    ValidationRequest,
-)
-from app.domain.validation_results import (
-    ValidationResult,
-    ValidationStatus,
-)
+from app.domain.validation import SimpleValidation, ValidationRequest
+from app.domain.validation_results import ValidationResult
+from app.domain.validations.accessories.leasability.criteria import LeasabilityCriteria
 from app.domain.validations.accessories.leasability.strategies import (
     bawu_leasability_strategy,
     standard_leasability_strategy,
 )
-from app.shared.decision_strategies.contracts import Criterion
-from app.shared.decision_strategies.evaluator import DecisionTreeEvaluator
-from app.shared.decision_strategies.nodes import StrategyDecision
-from app.shared.decision_strategies.results import StrategyEvaluation
-from app.shared.decision_strategies.selector import (
-    PriorityStrategySelector,
-    StrategySelectionRule,
-)
 
 
-class AccessoryLeasabilityValidation(StrategyBasedValidation):
-    """Apply a leasing strategy and translate its decision into a business result."""
+class AccessoryLeasabilityValidation(SimpleValidation):
+    """Select the leasability flow for the submitted order context."""
 
     id = "accessory_leasability"
 
-    def __init__(self, criteria: Sequence[Criterion[ValidationRequest]]) -> None:
-        strategy = standard_leasability_strategy()
-        bawu_strategy = bawu_leasability_strategy()
-        evaluator = DecisionTreeEvaluator(criteria)
-        evaluator.validate_strategy(strategy)
-        evaluator.validate_strategy(bawu_strategy)
-        super().__init__(
-            PriorityStrategySelector(
-                [
-                    StrategySelectionRule(
-                        strategy=bawu_strategy,
-                        priority=1,
-                        matches=lambda request: request.context.is_bawu_order,
-                    )
-                ],
-                default=strategy,
-            ),
-            evaluator,
-        )
+    def __init__(self, criteria: LeasabilityCriteria) -> None:
+        self._criteria = criteria
 
-    def result_from_strategy(self, evaluation: StrategyEvaluation) -> ValidationResult:
-        status = {
-            StrategyDecision.ACCEPT: ValidationStatus.PASSED,
-            StrategyDecision.REJECT: ValidationStatus.REJECTED,
-            StrategyDecision.UNDETERMINED: ValidationStatus.UNDETERMINED,
-        }[evaluation.decision]
-        return ValidationResult(
-            status=status,
-            details=evaluation.details,
-        )
+    async def evaluate_result(self, request: ValidationRequest) -> ValidationResult:
+        if request.context.is_bawu_order:
+            return await bawu_leasability_strategy(request, self._criteria)
+        return await standard_leasability_strategy(request, self._criteria)

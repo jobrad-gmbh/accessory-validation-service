@@ -1,104 +1,97 @@
-from dataclasses import replace
+"""Standard and BAWU leasability flows expressed as ordinary Python."""
 
-from app.shared.decision_strategies.nodes import (
-    CriterionNode,
-    DecisionNode,
-    DecisionStrategy,
-    StrategyDecision,
-)
-
-
-def bawu_leasability_strategy() -> DecisionStrategy:
-    """Use the standard rules without the StVZO acceptance check."""
-    standard = standard_leasability_strategy()
-    nodes = dict(standard.nodes)
-    technical_check = nodes["technical_bicycle_component_check"]
-    assert isinstance(technical_check, CriterionNode)
-    nodes[technical_check.id] = replace(
-        technical_check,
-        on_no="functional_unit_check",
-        on_unknown="functional_unit_check",
-    )
-    del nodes["stvzo_equipment_check"]
-    return DecisionStrategy(
-        id="bawu_accessory_leasability",
-        version=standard.version,
-        entry_node_id=standard.entry_node_id,
-        nodes=nodes,
-    )
+from app.domain.criterion import Criterion, CriterionAnswer, CriterionResult
+from app.domain.errors import ValidationExecutionError
+from app.domain.validation import ValidationRequest
+from app.domain.validation_results import ValidationResult, ValidationStatus
+from app.domain.validations.accessories.leasability.criteria import LeasabilityCriteria
 
 
-def standard_leasability_strategy() -> DecisionStrategy:
-    return DecisionStrategy(
-        id="standard_accessory_leasability",
-        version="0.1.0",
-        entry_node_id="explicitly_not_leasable_type_check",
-        nodes={
-            "explicitly_not_leasable_type_check": CriterionNode(
-                "explicitly_not_leasable_type_check",
-                "explicitly_not_leasable_type",
-                "not_leasable_type_special_rules_check",
-                "explicitly_leasable_type_check",
-                "explicitly_leasable_type_check",
-            ),
-            "not_leasable_type_special_rules_check": CriterionNode(
-                "not_leasable_type_special_rules_check",
-                "special_rules",
-                "leasable",
-                "not_leasable",
-                "not_leasable",
-            ),
-            "explicitly_leasable_type_check": CriterionNode(
-                "explicitly_leasable_type_check",
-                "explicitly_leasable_type",
-                "leasable_type_special_rules_check",
-                "technical_bicycle_component_check",
-                "technical_bicycle_component_check",
-            ),
-            "leasable_type_special_rules_check": CriterionNode(
-                "leasable_type_special_rules_check",
-                "special_rules",
-                "leasable",
-                "not_leasable",
-                "leasable",
-            ),
-            "technical_bicycle_component_check": CriterionNode(
-                "technical_bicycle_component_check",
-                "technical_bicycle_component",
-                "leasable",
-                "stvzo_equipment_check",
-                "stvzo_equipment_check",
-            ),
-            "stvzo_equipment_check": CriterionNode(
-                "stvzo_equipment_check",
-                "stvzo_equipment",
-                "leasable",
-                "functional_unit_check",
-                "functional_unit_check",
-            ),
-            "functional_unit_check": CriterionNode(
-                "functional_unit_check",
-                "functional_unit_with_bicycle",
-                "leasable",
-                "installable_on_bicycle_check",
-                "installable_on_bicycle_check",
-            ),
-            "installable_on_bicycle_check": CriterionNode(
-                "installable_on_bicycle_check",
-                "installable_on_bicycle",
-                "leasable",
-                "not_leasable",
-                "not_leasable",
-            ),
-            "leasable": DecisionNode(
-                "leasable",
-                StrategyDecision.ACCEPT,
-                "El accesorio es financiable.",
-            ),
-            "not_leasable": DecisionNode(
-                "not_leasable",
-                StrategyDecision.REJECT,
-                "El accesorio no es financiable.",
-            ),
-        },
+async def standard_leasability_strategy(
+    request: ValidationRequest, criteria: LeasabilityCriteria
+) -> ValidationResult:
+    if (
+        await _answer(criteria.explicitly_not_leasable_type, request)
+        is CriterionAnswer.YES
+    ):
+        # An excluded type needs an explicit exception; UNKNOWN still rejects.
+        special = await _answer(criteria.special_rules, request)
+        return _result(special is CriterionAnswer.YES)
+
+    if await _answer(criteria.explicitly_leasable_type, request) is CriterionAnswer.YES:
+        # An allowed type stays allowed unless special rules explicitly reject it.
+        special = await _answer(criteria.special_rules, request)
+        return _result(special is not CriterionAnswer.NO)
+
+    if (
+        await _answer(criteria.technical_bicycle_component, request)
+        is CriterionAnswer.YES
+    ):
+        return _result(True)
+
+    if await _answer(criteria.stvzo_equipment, request) is CriterionAnswer.YES:
+        return _result(True)
+
+    if (
+        await _answer(criteria.functional_unit_with_bicycle, request)
+        is CriterionAnswer.YES
+    ):
+        return _result(True)
+
+    installable = await _answer(criteria.installable_on_bicycle, request)
+    return _result(installable is CriterionAnswer.YES)
+
+
+async def bawu_leasability_strategy(
+    request: ValidationRequest, criteria: LeasabilityCriteria
+) -> ValidationResult:
+    if (
+        await _answer(criteria.explicitly_not_leasable_type, request)
+        is CriterionAnswer.YES
+    ):
+        # An excluded type needs an explicit exception; UNKNOWN still rejects.
+        special = await _answer(criteria.special_rules, request)
+        return _result(special is CriterionAnswer.YES)
+
+    if await _answer(criteria.explicitly_leasable_type, request) is CriterionAnswer.YES:
+        # An allowed type stays allowed unless special rules explicitly reject it.
+        special = await _answer(criteria.special_rules, request)
+        return _result(special is not CriterionAnswer.NO)
+
+    if (
+        await _answer(criteria.technical_bicycle_component, request)
+        is CriterionAnswer.YES
+    ):
+        return _result(True)
+
+    if (
+        await _answer(criteria.functional_unit_with_bicycle, request)
+        is CriterionAnswer.YES
+    ):
+        return _result(True)
+
+    installable = await _answer(criteria.installable_on_bicycle, request)
+    return _result(installable is CriterionAnswer.YES)
+
+
+async def _answer(criterion: Criterion, request: ValidationRequest) -> CriterionAnswer:
+    try:
+        result = await criterion.evaluate(request)
+        if not isinstance(result, CriterionResult) or not isinstance(
+            result.answer, CriterionAnswer
+        ):
+            raise TypeError("Criterion returned an unsupported answer")
+        return result.answer
+    except Exception as exc:
+        raise ValidationExecutionError(f"Criterion {criterion.id} failed") from exc
+
+
+def _result(leasable: bool) -> ValidationResult:
+    return ValidationResult(
+        status=ValidationStatus.PASSED if leasable else ValidationStatus.REJECTED,
+        details=(
+            "El accesorio es financiable."
+            if leasable
+            else "El accesorio no es financiable."
+        ),
     )

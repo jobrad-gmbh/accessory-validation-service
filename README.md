@@ -63,36 +63,36 @@ app/
 ├── adapters/
 │   ├── web/
 │   └── llm/
-├── domain/
-│   ├── product.py
-│   ├── validation.py
-│   ├── validation_results.py
-│   ├── validation_service.py
-│   ├── errors.py
-│   └── validations/
-│       └── accessories/
-│           ├── suite.py
-│           └── leasability/
-│               ├── validation.py
-│               ├── strategies.py
-│               └── criteria/
-└── shared/
-    └── decision_strategies/
+└── domain/
+    ├── criterion.py
+    ├── product.py
+    ├── validation.py
+    ├── validation_results.py
+    ├── validation_service.py
+    ├── errors.py
+    └── validations/
+        └── accessories/
+            ├── suite.py
+            └── leasability/
+                ├── validation.py
+                ├── strategies.py
+                └── criteria/
 ```
 
 - `domain/product.py` defines submitted product data, origin, business context,
   and the existing product-resolution contract.
 - `domain/validation.py` defines the validation request, common interface, and
   execution helpers. `validation_results.py` owns results, executions, and reports.
+- `domain/criterion.py` defines the criterion interface and YES/NO/UNKNOWN answers.
 - `domain/validation_service.py` runs the supplied validations and aggregates
   their results. Business rejection does not stop the suite; technical failure does.
 - `domain/validations/accessories/suite.py` defines which accessory validations
   run and constructs the suite. Web dependencies obtain the service from here.
-- Each concrete validation owns its criteria and business strategies. Leasability
-  contains both the standard and BAWU strategies.
-- `shared/decision_strategies` evaluates decision trees without knowing about
-  products or accessory policies. Keep generic evaluation mechanics here and
-  business-specific paths alongside their validation.
+- Each concrete validation owns its criteria and business flows. Leasability
+  selects the standard or BAWU async function from the order context. Both use
+  ordinary conditionals; BAWU skips the StVZO acceptance check.
+- Validation executions retain the submitted product and final business result.
+  Strategy definitions, versions, and execution traces are not recorded.
 
 Add new accessory checks under `domain/validations/accessories` and include them
 in `suite.py`. A small check can be a single module; use a package when it needs

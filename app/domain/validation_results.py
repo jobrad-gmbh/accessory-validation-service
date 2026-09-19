@@ -6,7 +6,6 @@ from uuid import UUID, uuid4
 from app.domain.product import (
     Product,
 )
-from app.shared.decision_strategies.results import StrategyEvaluation
 
 
 class ValidationStatus(StrEnum):
@@ -42,7 +41,6 @@ class ValidationExecution:
     product: Product
     validation_id: str
     result: ValidationResult
-    strategy_evaluations: tuple[StrategyEvaluation, ...] = ()
     id: UUID = field(default_factory=uuid4)
     executed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -51,7 +49,6 @@ class ValidationExecution:
             raise ValueError("Validation execution requires a validation id")
         if self.executed_at.tzinfo is None or self.executed_at.utcoffset() is None:
             raise ValueError("Validation executed_at must include a timezone")
-        object.__setattr__(self, "strategy_evaluations", tuple(self.strategy_evaluations))
 
 
 @dataclass(frozen=True, kw_only=True)
