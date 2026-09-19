@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import replace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -9,7 +9,7 @@ from app.domain.product import Product, ProductContext, ProductOrigin, ProductTy
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationStatus
 from app.domain.validation_service import ProductValidationService
-from app.domain.validations.accessories.leasability.criteria import LeasabilityCriteria
+from app.domain.validations.accessories.leasability import strategies
 from app.domain.validations.accessories.leasability.validation import (
     AccessoryLeasabilityValidation,
 )
@@ -40,33 +40,38 @@ def request(is_bawu=False):
     )
 
 
-def criteria_with_answers(answers, calls, default=NO):
-    class FixedCriterion:
-        def __init__(self, name):
-            self.id = name
+def criteria_with_answers(monkeypatch, answers, calls, default=NO):
+    async def evaluate(self, submitted):
+        calls.append(self.id)
+        return CriterionResult(
+            answers.get(self.id, default), "Deterministic criterion answer."
+        )
 
-        async def evaluate(self, submitted):
-            calls.append(self.id)
-            return CriterionResult(
-                answers.get(self.id, default), "Deterministic criterion answer."
-            )
-
-    return LeasabilityCriteria(
-        **{name: FixedCriterion(name) for name in (*ORDER, "special_rules")}
-    )
+    for criterion in (
+        strategies.ExplicitlyNotLeasableAccessoryTypeCriterion,
+        strategies.ExplicitlyLeasableAccessoryTypeCriterion,
+        strategies.SpecialRulesCriterion,
+        strategies.TechnicalBicycleComponentCriterion,
+        strategies.StvzoEquipmentCriterion,
+        strategies.FunctionalUnitWithBicycleCriterion,
+        strategies.InstallableOnBicycleCriterion,
+    ):
+        monkeypatch.setattr(criterion, "evaluate", evaluate)
 
 
 @pytest.mark.parametrize("is_bawu", [False, True])
 @pytest.mark.parametrize("excluded", [False, True])
 @pytest.mark.parametrize("special", [YES, NO, UNKNOWN])
-def test_special_rules_preserve_type_specific_outcomes(is_bawu, excluded, special):
+def test_special_rules_preserve_type_specific_outcomes(
+    monkeypatch, is_bawu, excluded, special
+):
     type_check = ORDER[0] if excluded else ORDER[1]
     calls = []
-    criteria = criteria_with_answers({type_check: YES, "special_rules": special}, calls)
-    submitted = request(is_bawu)
-    execution = asyncio.run(
-        AccessoryLeasabilityValidation(criteria).validate(submitted)
+    criteria_with_answers(
+        monkeypatch, {type_check: YES, "special_rules": special}, calls
     )
+    submitted = request(is_bawu)
+    execution = asyncio.run(AccessoryLeasabilityValidation().validate(submitted))
 
     passed = special is YES if excluded else special is not NO
     assert execution.result.status is (
@@ -81,14 +86,12 @@ def test_special_rules_preserve_type_specific_outcomes(is_bawu, excluded, specia
 @pytest.mark.parametrize("default", [NO, UNKNOWN])
 @pytest.mark.parametrize("accepting_criterion", [None, *ORDER[2:]])
 def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
-    is_bawu, default, accepting_criterion
+    monkeypatch, is_bawu, default, accepting_criterion
 ):
     calls = []
     answers = {accepting_criterion: YES} if accepting_criterion else {}
-    criteria = criteria_with_answers(answers, calls, default)
-    execution = asyncio.run(
-        AccessoryLeasabilityValidation(criteria).validate(request(is_bawu))
-    )
+    criteria_with_answers(monkeypatch, answers, calls, default)
+    execution = asyncio.run(AccessoryLeasabilityValidation().validate(request(is_bawu)))
 
     applicable = [name for name in ORDER if not (is_bawu and name == "stvzo_equipment")]
     passed = accepting_criterion in applicable
@@ -102,29 +105,23 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
         ValidationStatus.PASSED if passed else ValidationStatus.REJECTED
     )
     assert execution.result.details == (
-        "El accesorio es financiable." if passed else "El accesorio no es financiable."
+        "The accessory is leasable." if passed else "The accessory is not leasable."
     )
 
 
-@pytest.mark.parametrize("failure", ["exception", "invalid_answer", "invalid_result"])
-def test_criterion_failures_are_technical_errors(failure):
+def test_criterion_failures_are_technical_errors(monkeypatch):
     calls = []
-
-    class FailingCriterion:
-        id = "explicitly_not_leasable_type"
-
-        async def evaluate(self, submitted):
-            if failure == "exception":
-                raise RuntimeError("Provider unavailable")
-            if failure == "invalid_answer":
-                return CriterionResult("YES", "Wrong answer type")
-            return None
-
-    criteria = replace(
-        criteria_with_answers({}, calls),
-        explicitly_not_leasable_type=FailingCriterion(),
+    criteria_with_answers(monkeypatch, {}, calls)
+    failure = RuntimeError("Provider unavailable")
+    monkeypatch.setattr(
+        strategies.ExplicitlyNotLeasableAccessoryTypeCriterion,
+        "evaluate",
+        AsyncMock(side_effect=failure),
     )
-    service = ProductValidationService([AccessoryLeasabilityValidation(criteria)])
-    with pytest.raises(ValidationExecutionError, match="Criterion .* failed"):
+    service = ProductValidationService([AccessoryLeasabilityValidation()])
+    with pytest.raises(
+        ValidationExecutionError, match="Validation accessory_leasability failed"
+    ) as exc:
         asyncio.run(service.validate(request()))
+    assert exc.value.__cause__ is failure
     assert calls == []

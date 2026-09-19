@@ -13,7 +13,7 @@ from app.domain.product import (
     ProductType,
 )
 from app.domain.validation import (
-    SimpleValidation,
+    Validation,
     ValidationRequest,
 )
 from app.domain.validation_results import (
@@ -87,10 +87,10 @@ def test_validation_execution_owns_its_result():
     assert not hasattr(execution, "product_id")
 
 
-def test_simple_validation_creates_an_execution():
+def test_validation_creates_an_execution():
     associated_product = product()
 
-    class AlwaysPasses(SimpleValidation):
+    class AlwaysPasses(Validation):
         id = "always_passes"
 
         async def evaluate_result(self, request):

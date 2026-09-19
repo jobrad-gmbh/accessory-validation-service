@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.adapters.web.dependencies import get_validation_service
 from app.domain.validation import (
-    SimpleValidation,
+    Validation,
 )
 from app.domain.validation_results import (
     ValidationResult,
@@ -30,7 +30,7 @@ def payload(**overrides):
 def test_validate_accessory_returns_the_domain_report(test_client: TestClient):
     received_requests = []
 
-    class AlwaysPasses(SimpleValidation):
+    class AlwaysPasses(Validation):
         id = "test_validation"
 
         async def evaluate_result(self, request):
@@ -58,7 +58,7 @@ def test_validate_accessory_returns_the_domain_report(test_client: TestClient):
 def test_validate_accessory_passes_the_supplied_context(test_client: TestClient):
     contexts = []
 
-    class RecordsContext(SimpleValidation):
+    class RecordsContext(Validation):
         id = "records_context"
 
         async def evaluate_result(self, request):
@@ -96,7 +96,7 @@ def test_validate_accessory_returns_structured_input_errors(test_client: TestCli
 
 
 def test_validate_accessory_maps_technical_failures(test_client: TestClient):
-    class Fails(SimpleValidation):
+    class Fails(Validation):
         id = "failing_validation"
 
         async def evaluate_result(self, request):

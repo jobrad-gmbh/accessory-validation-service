@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Protocol, final
+from typing import final
 
 from app.domain.product import Product, ProductContext
 from app.domain.validation_results import (
@@ -21,17 +21,8 @@ class ValidationRequest:
     context: ProductContext = field(default_factory=ProductContext)
 
 
-class Validation(Protocol):
-    """An independent business check with a stable id."""
-
-    @property
-    def id(self) -> str: ...
-
-    async def validate(self, request: ValidationRequest) -> ValidationExecution: ...
-
-
-class SimpleValidation(ABC):
-    """Build an execution around a validation's business result."""
+class Validation(ABC):
+    """A business check that wraps its result in a validation execution."""
 
     id: str
 
