@@ -1,15 +1,19 @@
 import asyncio
+import json
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import BaseModel
 
-from app.domain.criterion import CriterionAnswer, CriterionResult
+from app.adapters.llm import LiteLLMConfig
+from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.errors import ValidationExecutionError
 from app.domain.product import Product, ProductContext, ProductOrigin, ProductType
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationStatus
 from app.domain.validation_service import ProductValidationService
 from app.domain.validations.accessories.leasability import strategies
+from app.domain.validations.accessories.leasability import criteria
 from app.domain.validations.accessories.leasability.validation import (
     AccessoryLeasabilityValidation,
 )
@@ -40,12 +44,17 @@ def request(is_bawu=False):
     )
 
 
+def validation():
+    return AccessoryLeasabilityValidation(AsyncMock())
+
+
 def criteria_with_answers(monkeypatch, answers, calls, default=NO):
     async def evaluate(self, submitted):
         calls.append(self.id)
-        return CriterionResult(
-            answers.get(self.id, default), "Deterministic criterion answer."
-        )
+        configured = answers.get(self.id, default)
+        if isinstance(configured, (CriterionResult, SpecialRuleResult)):
+            return configured
+        return CriterionResult(configured, "Deterministic criterion answer.")
 
     for criterion in (
         strategies.ExplicitlyNotLeasableAccessoryTypeCriterion,
@@ -61,7 +70,15 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
 
 @pytest.mark.parametrize("is_bawu", [False, True])
 @pytest.mark.parametrize("excluded", [False, True])
-@pytest.mark.parametrize("special", [YES, NO, UNKNOWN])
+@pytest.mark.parametrize(
+    "special",
+    [
+        SpecialRuleResult(YES, YES, "A leasable special rule matched."),
+        SpecialRuleResult(YES, NO, "A non-leasable special rule matched."),
+        SpecialRuleResult(NO, UNKNOWN, "No special rule matched."),
+        SpecialRuleResult(UNKNOWN, UNKNOWN, "The match could not be determined."),
+    ],
+)
 def test_special_rules_preserve_type_specific_outcomes(
     monkeypatch, is_bawu, excluded, special
 ):
@@ -71,9 +88,9 @@ def test_special_rules_preserve_type_specific_outcomes(
         monkeypatch, {type_check: YES, "special_rules": special}, calls
     )
     submitted = request(is_bawu)
-    execution = asyncio.run(AccessoryLeasabilityValidation().validate(submitted))
+    execution = asyncio.run(validation().validate(submitted))
 
-    passed = special is YES if excluded else special is not NO
+    passed = special.leasable is YES if special.answer is YES else not excluded
     assert execution.result.status is (
         ValidationStatus.PASSED if passed else ValidationStatus.REJECTED
     )
@@ -91,7 +108,7 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
     calls = []
     answers = {accepting_criterion: YES} if accepting_criterion else {}
     criteria_with_answers(monkeypatch, answers, calls, default)
-    execution = asyncio.run(AccessoryLeasabilityValidation().validate(request(is_bawu)))
+    execution = asyncio.run(validation().validate(request(is_bawu)))
 
     applicable = [name for name in ORDER if not (is_bawu and name == "stvzo_equipment")]
     passed = accepting_criterion in applicable
@@ -118,10 +135,219 @@ def test_criterion_failures_are_technical_errors(monkeypatch):
         "evaluate",
         AsyncMock(side_effect=failure),
     )
-    service = ProductValidationService([AccessoryLeasabilityValidation()])
+    service = ProductValidationService([validation()])
     with pytest.raises(
         ValidationExecutionError, match="Validation accessory_leasability failed"
     ) as exc:
         asyncio.run(service.validate(request()))
     assert exc.value.__cause__ is failure
     assert calls == []
+
+
+@pytest.mark.parametrize("answer", list(CriterionAnswer))
+def test_explicitly_not_leasable_type_uses_llm_result(answer):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = json.dumps(
+        {"answer": answer.value, "details": "Classification reason."}
+    )
+
+    result = asyncio.run(
+        criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(request())
+    )
+
+    assert result == CriterionResult(answer, "Classification reason.")
+    product_payload = json.loads(client.generate.await_args.args[0])
+    assert product_payload["brand"] == "Example"
+    assert product_payload["model"] == "Rack"
+    instructions = client.generate.await_args.kwargs["instructions"]
+    assert "# Explicitly not-leasable accessory types" in instructions
+    assert "Bicycle trailers" in instructions
+    assert "The object must match this JSON Schema" in instructions
+    schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
+    assert set(schema["properties"]) == {"answer", "details"}
+    assert client.generate.await_args.kwargs["config"].models == (
+        "gpt-luna",
+        "glm-5.3",
+    )
+
+
+def test_prompt_output_schema_is_selected_per_criterion():
+    class RankedResponse(BaseModel):
+        rank: int
+        reason: str
+
+    instructions = criteria.load_prompt(
+        criteria.EXPLICITLY_NOT_LEASABLE_PROMPT_PATH, RankedResponse
+    )
+
+    schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
+    assert set(schema["properties"]) == {"rank", "reason"}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "not json",
+        '{"answer": "MAYBE", "details": "Unsure."}',
+        '{"answer": "YES", "details": ""}',
+        '{"answer": "YES", "details": "Valid", "extra": true}',
+    ],
+)
+def test_explicitly_not_leasable_type_rejects_invalid_llm_result(response):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = response
+
+    with pytest.raises(ValueError, match="invalid criterion response"):
+        asyncio.run(
+            criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(
+                request()
+            )
+        )
+
+
+@pytest.mark.parametrize("answer", list(CriterionAnswer))
+def test_explicitly_leasable_type_uses_llm_result(answer):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = json.dumps(
+        {"answer": answer.value, "details": "Classification reason."}
+    )
+
+    result = asyncio.run(
+        criteria.ExplicitlyLeasableAccessoryTypeCriterion(client).evaluate(request())
+    )
+
+    assert result == CriterionResult(answer, "Classification reason.")
+    instructions = client.generate.await_args.kwargs["instructions"]
+    assert "# Explicitly leasable accessory types" in instructions
+    assert "Bike lock" in instructions
+    assert client.generate.await_args.kwargs["config"].models == (
+        "gpt-luna",
+        "glm-5.3",
+    )
+
+
+@pytest.mark.parametrize(
+    "criterion_class,prompt_heading",
+    [
+        (criteria.TechnicalBicycleComponentCriterion, "# Technical bicycle components"),
+        (criteria.StvzoEquipmentCriterion, "# StVZO-related equipment"),
+        (criteria.FunctionalUnitWithBicycleCriterion, "# Functional units"),
+        (criteria.InstallableOnBicycleCriterion, "# Installation status"),
+    ],
+)
+def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = (
+        '{"answer": "YES", "details": "Classification reason."}'
+    )
+
+    result = asyncio.run(criterion_class(client).evaluate(request()))
+
+    assert result == CriterionResult(YES, "Classification reason.")
+    assert prompt_heading in client.generate.await_args.kwargs["instructions"]
+    assert client.generate.await_args.kwargs["config"].models == (
+        "gpt-luna",
+        "glm-5.3",
+    )
+
+
+@pytest.mark.parametrize(
+    "answer,leasable",
+    [
+        (YES, YES),
+        (YES, NO),
+        (NO, UNKNOWN),
+        (UNKNOWN, UNKNOWN),
+    ],
+)
+def test_special_rules_use_leasability_result(answer, leasable):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = json.dumps(
+        {
+            "answer": answer.value,
+            "leasable": leasable.value,
+            "details": "Special-rule reason.",
+        }
+    )
+
+    result = asyncio.run(criteria.SpecialRulesCriterion(client).evaluate(request()))
+
+    assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.")
+    instructions = client.generate.await_args.kwargs["instructions"]
+    schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
+    assert set(schema["properties"]) == {"answer", "leasable", "details"}
+
+
+@pytest.mark.parametrize(
+    "answer,leasable",
+    [
+        (YES, UNKNOWN),
+        (NO, YES),
+        (NO, NO),
+        (UNKNOWN, YES),
+        (UNKNOWN, NO),
+    ],
+)
+def test_special_rules_reject_contradictory_results(answer, leasable):
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = json.dumps(
+        {
+            "answer": answer.value,
+            "leasable": leasable.value,
+            "details": "Contradictory result.",
+        }
+    )
+
+    with pytest.raises(ValueError, match="invalid criterion response"):
+        asyncio.run(criteria.SpecialRulesCriterion(client).evaluate(request()))
+
+
+def test_criterion_overrides_apply_only_to_one_call():
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+        temperature=0.5,
+    )
+    client.generate.return_value.text = '{"answer": "NO", "details": "A rack."}'
+    criterion = criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client)
+    override = client.config.with_overrides(
+        models=("other-primary", "other-backup"),
+        temperature=0.1,
+        max_tokens=200,
+        timeout_seconds=15,
+    )
+
+    asyncio.run(criterion.evaluate(request(), config=override))
+    asyncio.run(criterion.evaluate(request()))
+
+    assert client.generate.await_args_list[0].kwargs["config"] is override
+    default_config = client.generate.await_args_list[1].kwargs["config"]
+    assert default_config.models == ("gpt-luna", "glm-5.3")
+    assert default_config.temperature == 0.5
+    assert client.config.models == ("client-default",)
+    assert client.config.temperature == 0.5

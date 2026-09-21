@@ -17,13 +17,11 @@ from app.adapters.llm import (
     LiteLLMConfig,
     ModelsNotFoundError,
     NoulQuestion,
-    OpenAICompatibleClient,
-    OpenAIConfig,
     ScoreQuestion,
 )
 
 
-def config(cls=OpenAIConfig, **overrides):
+def config(cls=LiteLLMConfig, **overrides):
     return cls(
         base_url="https://llm.example/v1", models=("first", "second"), **overrides
     )
@@ -39,24 +37,20 @@ def completion(text="Hello", finish="stop"):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "client_cls,config_cls",
-    [
-        (OpenAICompatibleClient, OpenAIConfig),
-        (LiteLLMClient, LiteLLMConfig),
-    ],
-)
-async def test_generate_fallback_and_request_overrides(client_cls, config_cls):
+async def test_generate_fallback_and_request_overrides():
     requests = []
 
     def handle(request):
         requests.append(request)
         if len(requests) == 1:
-            return httpx.Response(404, json={"error": {"code": "model_not_found"}})
+            return httpx.Response(
+                400,
+                json={"error": {"message": "Invalid model name passed in model=first"}},
+            )
         return httpx.Response(200, json=completion())
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        client = client_cls(http, config(config_cls, api_key="secret"))
+        client = LiteLLMClient(http, config(api_key="secret"))
         override = client.config.with_overrides(
             temperature=0.2, max_tokens=50, timeout_seconds=3
         )
@@ -85,7 +79,7 @@ async def test_exhausted_models():
         return httpx.Response(404, json={"error": {"code": "model_not_found"}})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        client = OpenAICompatibleClient(http, config())
+        client = LiteLLMClient(http, config())
         with pytest.raises(ModelsNotFoundError) as error:
             await client.generate("hi")
     assert calls == ["first", "second"]
@@ -103,7 +97,7 @@ async def test_http_errors_do_not_fallback_or_leak_body(status):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(LLMError) as error:
-            await OpenAICompatibleClient(http, config()).generate("sensitive prompt")
+            await LiteLLMClient(http, config()).generate("sensitive prompt")
     assert len(calls) == 1
     assert error.value.status_code == status
     assert "sensitive" not in str(error.value)
@@ -127,7 +121,7 @@ async def test_invalid_responses(body):
         )
     ) as http:
         with pytest.raises(LLMResponseError):
-            await OpenAICompatibleClient(http, config()).generate("hi")
+            await LiteLLMClient(http, config()).generate("hi")
 
 
 @pytest.mark.asyncio
@@ -148,7 +142,7 @@ async def test_transport_errors_and_cancellation(error, expected):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(expected):
-            await OpenAICompatibleClient(http, config()).generate("hi")
+            await LiteLLMClient(http, config()).generate("hi")
     assert len(calls) == 1
 
 
@@ -160,9 +154,7 @@ async def test_total_generation_timeout():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(LLMTimeoutError):
-            await OpenAICompatibleClient(http, config(timeout_seconds=0.01)).generate(
-                "hi"
-            )
+            await LiteLLMClient(http, config(timeout_seconds=0.01)).generate("hi")
 
 
 def test_env_defaults_and_explicit_values(monkeypatch):
@@ -180,6 +172,14 @@ def test_env_defaults_and_explicit_values(monkeypatch):
     assert defaults.models == ("primary", "backup")
     with pytest.raises(ValueError):
         defaults.with_overrides(typo=1)
+
+
+def test_litellm_requires_configured_models(monkeypatch):
+    monkeypatch.setenv("LITELLM_BASE_URL", "https://gateway.example/v1")
+    monkeypatch.delenv("LITELLM_MODELS", raising=False)
+
+    with pytest.raises(ValidationError):
+        LiteLLMConfig.from_env()
 
 
 @pytest.mark.parametrize(
@@ -349,7 +349,7 @@ async def test_concurrent_overrides_are_isolated():
         return httpx.Response(200, json=completion())
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        client = OpenAICompatibleClient(http, config())
+        client = LiteLLMClient(http, config())
         await asyncio.gather(
             client.generate(
                 "one",

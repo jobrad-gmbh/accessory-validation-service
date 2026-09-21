@@ -1,3 +1,4 @@
+from app.adapters.llm import LLMClient
 from app.domain.validation import Validation, ValidationRequest
 from app.domain.validation_results import ValidationResult
 from app.domain.validations.accessories.leasability.strategies import (
@@ -11,7 +12,10 @@ class AccessoryLeasabilityValidation(Validation):
 
     id = "accessory_leasability"
 
+    def __init__(self, litellm_client: LLMClient) -> None:
+        self._litellm_client = litellm_client
+
     async def evaluate_result(self, request: ValidationRequest) -> ValidationResult:
         if request.context.is_bawu_order:
-            return await bawu_leasability_strategy(request)
-        return await standard_leasability_strategy(request)
+            return await bawu_leasability_strategy(request, self._litellm_client)
+        return await standard_leasability_strategy(request, self._litellm_client)

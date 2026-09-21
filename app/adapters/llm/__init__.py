@@ -16,7 +16,6 @@ from app.adapters.llm.errors import (
     ModelsNotFoundError,
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
-from app.adapters.llm.openai_compatible import OpenAICompatibleClient, OpenAIConfig
 
 __all__ = [
     "ChatConfig",
@@ -36,6 +35,4 @@ __all__ = [
     "LiteLLMClient",
     "LiteLLMConfig",
     "ModelsNotFoundError",
-    "OpenAICompatibleClient",
-    "OpenAIConfig",
 ]

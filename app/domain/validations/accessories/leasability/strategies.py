@@ -1,6 +1,7 @@
 """Standard and BAWU leasability flows expressed as ordinary Python."""
 
-from app.domain.criterion import CriterionAnswer
+from app.adapters.llm import LLMClient
+from app.domain.criterion import CriterionAnswer, SpecialRuleResult
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationResult, ValidationStatus
 from app.domain.validations.accessories.leasability.criteria import (
@@ -14,66 +15,74 @@ from app.domain.validations.accessories.leasability.criteria import (
 )
 
 
-async def standard_leasability_strategy(request: ValidationRequest) -> ValidationResult:
+async def standard_leasability_strategy(
+    request: ValidationRequest, litellm_client: LLMClient
+) -> ValidationResult:
     if (
-        await ExplicitlyNotLeasableAccessoryTypeCriterion().evaluate(request)
+        await ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client).evaluate(
+            request
+        )
     ).answer is CriterionAnswer.YES:
-        # An excluded type needs an explicit exception; UNKNOWN still rejects.
-        special = (await SpecialRulesCriterion().evaluate(request)).answer
-        return _result(special is CriterionAnswer.YES)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        return _result(_apply_special_rule(False, special))
 
     if (
-        await ExplicitlyLeasableAccessoryTypeCriterion().evaluate(request)
+        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(request)
     ).answer is CriterionAnswer.YES:
-        # An allowed type stays allowed unless special rules explicitly reject it.
-        special = (await SpecialRulesCriterion().evaluate(request)).answer
-        return _result(special is not CriterionAnswer.NO)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        return _result(_apply_special_rule(True, special))
 
     if (
-        await TechnicalBicycleComponentCriterion().evaluate(request)
-    ).answer is CriterionAnswer.YES:
-        return _result(True)
-
-    if (
-        await StvzoEquipmentCriterion().evaluate(request)
+        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(request)
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     if (
-        await FunctionalUnitWithBicycleCriterion().evaluate(request)
+        await StvzoEquipmentCriterion(litellm_client).evaluate(request)
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
-    installable = (await InstallableOnBicycleCriterion().evaluate(request)).answer
+    if (
+        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(request)
+    ).answer is CriterionAnswer.YES:
+        return _result(True)
+
+    installable = (
+        await InstallableOnBicycleCriterion(litellm_client).evaluate(request)
+    ).answer
     return _result(installable is CriterionAnswer.YES)
 
 
-async def bawu_leasability_strategy(request: ValidationRequest) -> ValidationResult:
+async def bawu_leasability_strategy(
+    request: ValidationRequest, litellm_client: LLMClient
+) -> ValidationResult:
     if (
-        await ExplicitlyNotLeasableAccessoryTypeCriterion().evaluate(request)
+        await ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client).evaluate(
+            request
+        )
     ).answer is CriterionAnswer.YES:
-        # An excluded type needs an explicit exception; UNKNOWN still rejects.
-        special = (await SpecialRulesCriterion().evaluate(request)).answer
-        return _result(special is CriterionAnswer.YES)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        return _result(_apply_special_rule(False, special))
 
     if (
-        await ExplicitlyLeasableAccessoryTypeCriterion().evaluate(request)
+        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(request)
     ).answer is CriterionAnswer.YES:
-        # An allowed type stays allowed unless special rules explicitly reject it.
-        special = (await SpecialRulesCriterion().evaluate(request)).answer
-        return _result(special is not CriterionAnswer.NO)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        return _result(_apply_special_rule(True, special))
 
     if (
-        await TechnicalBicycleComponentCriterion().evaluate(request)
-    ).answer is CriterionAnswer.YES:
-        return _result(True)
-
-    if (
-        await FunctionalUnitWithBicycleCriterion().evaluate(request)
+        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(request)
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
-    installable = (await InstallableOnBicycleCriterion().evaluate(request)).answer
+    if (
+        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(request)
+    ).answer is CriterionAnswer.YES:
+        return _result(True)
+
+    installable = (
+        await InstallableOnBicycleCriterion(litellm_client).evaluate(request)
+    ).answer
     return _result(installable is CriterionAnswer.YES)
 
 
@@ -86,3 +95,11 @@ def _result(leasable: bool) -> ValidationResult:
             else "The accessory is not leasable."
         ),
     )
+
+
+def _apply_special_rule(
+    default_leasable: bool, special_rule: SpecialRuleResult
+) -> bool:
+    if special_rule.answer is not CriterionAnswer.YES:
+        return default_leasable
+    return special_rule.leasable is CriterionAnswer.YES

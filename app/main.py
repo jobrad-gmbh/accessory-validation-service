@@ -1,6 +1,11 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 
+from app.adapters.llm import JevClient, LiteLLMClient
 from app.adapters.web.exceptions import (
     validation_configuration_exception_handler,
     validation_exception_handler,
@@ -18,8 +23,17 @@ from app.domain.errors import (
 setup_logging()
 
 
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    async with httpx.AsyncClient() as http_client:
+        application.state.litellm_client = LiteLLMClient(http_client)
+        application.state.jev_client = JevClient(http_client)
+        yield
+
+
 app = FastAPI(
     title="Accessory Validator",
+    lifespan=lifespan,
 )
 
 

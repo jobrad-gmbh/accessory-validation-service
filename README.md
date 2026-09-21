@@ -43,13 +43,11 @@ curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate \
 
 ```bash
 uv run python -m pytest
-uv run python -m ruff check app tests
+uv run python -m ruff check app
 uv run python -m mypy app
 ```
 
-The current leasability criteria return placeholder random answers. The API and
-aggregation behavior are ready to exercise while each criterion receives its
-real implementation.
+All current accessory leasability criteria use the configured LiteLLM gateway.
 
 ## Project structure
 
@@ -76,7 +74,8 @@ app/
             └── leasability/
                 ├── validation.py
                 ├── strategies.py
-                └── criteria.py       # Accessory leasability criteria
+                ├── criteria.py       # Accessory leasability criteria
+                └── prompts/          # LLM instructions in Markdown
 ```
 
 - `domain/product.py` defines submitted product data, origin, business context,
@@ -105,16 +104,16 @@ application assembly connect external implementations to business behavior.
 
 ## LLM adapters
 
-Standalone clients live in `app/adapters/llm`; they are not wired into validations.
-No additional SDK dependency is needed. `LiteLLMClient` targets **LiteLLM Proxy**,
-not the LiteLLM Python SDK. `OpenAICompatibleClient` targets the Chat Completions
-API. Both implement the `LLMClient` protocol for async text generation.
+Clients live in `app/adapters/llm`. `LiteLLMClient` is wired into accessory
+validation and targets **LiteLLM Proxy**, not the LiteLLM Python SDK. No additional
+SDK dependency is needed. It implements the `LLMClient` protocol for async text
+generation through LiteLLM's chat-completions endpoint.
 
 Settings come from explicit constructor values, environment variables, then `.env`.
-Use the `LITELLM_`, `OPENAI_`, or `TYPESAFE_` prefixes shown in `.env.example`.
-Endpoint and model list are required: there is no local-server or model default.
-Timeout defaults to 60 seconds. Temperature and token limit are omitted unless
-configured, allowing the provider's defaults. Model names must belong to that endpoint.
+Use the `LITELLM_` or `TYPESAFE_` prefixes shown in `.env.example`.
+The LiteLLM endpoint and baseline model list are required. Timeout defaults to 60
+seconds. Temperature and token limit are omitted unless configured, allowing the
+provider's defaults. Model names must belong to that endpoint.
 
 Inside an async function:
 
@@ -141,8 +140,31 @@ async with httpx.AsyncClient() as http:
     print(response.text)
 ```
 
-The caller owns the HTTP client; reuse it over the service's lifetime. Generation
-timeout is applied separately to each model attempt.
+The application creates one shared HTTP client, `litellm_client`, and `jev_client`
+at startup. The HTTP client is closed at shutdown. A lightweight validation service
+is built for each API request using the shared clients. The current accessory-type
+criterion receives `litellm_client` through the validation and strategy;
+`jev_client` is available for typed evaluation tasks. Generation timeout is applied
+separately to each model attempt.
+
+Each criterion call can override the shared defaults without changing other calls:
+
+```python
+result = await ExplicitlyNotLeasableAccessoryTypeCriterion(llm_client).evaluate(
+    request,
+    config=llm_client.config.with_overrides(
+        models=("gpt-luna", "glm-5.3"),
+        temperature=0.1,
+        max_tokens=200,
+        timeout_seconds=30,
+    ),
+)
+```
+
+These overrides are made in Python at the criterion call site; they are not fields
+in the public API payload. When `config` is omitted, the criterion keeps the shared
+client's other parameters and applies its own default models. The explicitly-not-
+leasable criterion declares `gpt-luna` and `glm-5.3` in `criteria.py`.
 
 Models are attempted in order **only when the provider explicitly reports a model
 not found**. Exhaustion raises `ModelsNotFoundError` with the attempted names.

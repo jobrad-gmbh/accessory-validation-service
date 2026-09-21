@@ -14,3 +14,10 @@ class CriterionAnswer(StrEnum):
 class CriterionResult:
     answer: CriterionAnswer
     details: str
+
+
+@dataclass(frozen=True)
+class SpecialRuleResult:
+    answer: CriterionAnswer
+    leasable: CriterionAnswer
+    details: str
