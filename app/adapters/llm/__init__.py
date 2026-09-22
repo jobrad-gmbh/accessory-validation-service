@@ -1,4 +1,4 @@
-from app.adapters.llm.client import LLMClient, LLMResponse
+from app.adapters.llm.client import LLMClient, LLMResponse, LLMSource
 from app.adapters.llm.config import ChatConfig, LLMConfig
 from app.adapters.llm.jev import (
     ChoiceQuestion,
@@ -14,6 +14,7 @@ from app.adapters.llm.errors import (
     LLMResponseError,
     LLMTimeoutError,
     ModelsNotFoundError,
+    UnsupportedLLMToolError,
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
 
@@ -30,9 +31,11 @@ __all__ = [
     "LLMConfig",
     "LLMError",
     "LLMResponse",
+    "LLMSource",
     "LLMResponseError",
     "LLMTimeoutError",
     "LiteLLMClient",
     "LiteLLMConfig",
     "ModelsNotFoundError",
+    "UnsupportedLLMToolError",
 ]

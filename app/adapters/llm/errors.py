@@ -20,3 +20,17 @@ class LLMTimeoutError(LLMError):
 
 class LLMResponseError(LLMError):
     """Malformed, refused, unsupported, or incomplete provider response."""
+
+
+class UnsupportedLLMToolError(LLMError):
+    """The selected model or provider cannot use a requested tool."""
+
+    def __init__(
+        self, tool: str, model: str, *, status_code: int | None = None
+    ) -> None:
+        self.tool = tool
+        self.model = model
+        super().__init__(
+            f"Model '{model}' does not support the '{tool}' tool",
+            status_code=status_code,
+        )

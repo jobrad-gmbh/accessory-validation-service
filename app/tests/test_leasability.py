@@ -17,6 +17,10 @@ from app.domain.validations.accessories.leasability import criteria
 from app.domain.validations.accessories.leasability.validation import (
     AccessoryLeasabilityValidation,
 )
+from app.domain.validations.accessories.product_information import (
+    AccessoryProductInformation,
+    AccessoryProductInformationService,
+)
 
 YES = CriterionAnswer.YES
 NO = CriterionAnswer.NO
@@ -28,7 +32,13 @@ ORDER = (
     "technical_bicycle_component",
     "stvzo_equipment",
     "functional_unit_with_bicycle",
-    "installable_on_bicycle",
+    "permanently_mounted",
+)
+
+PRODUCT_INFORMATION = AccessoryProductInformation(
+    summary="A fixed rear bicycle rack for carrying panniers.",
+    model="search-model",
+    used_web_search=True,
 )
 
 
@@ -45,11 +55,14 @@ def request(is_bawu=False):
 
 
 def validation():
-    return AccessoryLeasabilityValidation(AsyncMock())
+    information_service = AsyncMock(spec=AccessoryProductInformationService)
+    information_service.retrieve.return_value = PRODUCT_INFORMATION
+    return AccessoryLeasabilityValidation(AsyncMock(), information_service)
 
 
 def criteria_with_answers(monkeypatch, answers, calls, default=NO):
-    async def evaluate(self, submitted):
+    async def evaluate(self, submitted, product_information):
+        assert product_information is PRODUCT_INFORMATION
         calls.append(self.id)
         configured = answers.get(self.id, default)
         if isinstance(configured, (CriterionResult, SpecialRuleResult)):
@@ -63,9 +76,26 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         strategies.TechnicalBicycleComponentCriterion,
         strategies.StvzoEquipmentCriterion,
         strategies.FunctionalUnitWithBicycleCriterion,
-        strategies.InstallableOnBicycleCriterion,
+        strategies.PermanentlyMountedCriterion,
     ):
         monkeypatch.setattr(criterion, "evaluate", evaluate)
+
+
+def test_validation_retrieves_product_information_once(monkeypatch):
+    calls = []
+    criteria_with_answers(monkeypatch, {ORDER[0]: YES}, calls)
+    information_service = AsyncMock(spec=AccessoryProductInformationService)
+    information_service.retrieve.return_value = PRODUCT_INFORMATION
+    submitted = request()
+
+    asyncio.run(
+        AccessoryLeasabilityValidation(
+            AsyncMock(), information_service
+        ).validate(submitted)
+    )
+
+    information_service.retrieve.assert_awaited_once_with(submitted.product)
+    assert calls == [ORDER[0], "special_rules"]
 
 
 @pytest.mark.parametrize("is_bawu", [False, True])
@@ -156,13 +186,19 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
     )
 
     result = asyncio.run(
-        criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(request())
+        criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(
+            request(), PRODUCT_INFORMATION
+        )
     )
 
     assert result == CriterionResult(answer, "Classification reason.")
     product_payload = json.loads(client.generate.await_args.args[0])
     assert product_payload["brand"] == "Example"
     assert product_payload["model"] == "Rack"
+    assert product_payload["product_information"] == {
+        "summary": PRODUCT_INFORMATION.summary,
+        "sources": [],
+    }
     instructions = client.generate.await_args.kwargs["instructions"]
     assert "# Explicitly not-leasable accessory types" in instructions
     assert "Bicycle trailers" in instructions
@@ -208,7 +244,7 @@ def test_explicitly_not_leasable_type_rejects_invalid_llm_result(response):
     with pytest.raises(ValueError, match="invalid criterion response"):
         asyncio.run(
             criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(
-                request()
+                request(), PRODUCT_INFORMATION
             )
         )
 
@@ -225,7 +261,9 @@ def test_explicitly_leasable_type_uses_llm_result(answer):
     )
 
     result = asyncio.run(
-        criteria.ExplicitlyLeasableAccessoryTypeCriterion(client).evaluate(request())
+        criteria.ExplicitlyLeasableAccessoryTypeCriterion(client).evaluate(
+            request(), PRODUCT_INFORMATION
+        )
     )
 
     assert result == CriterionResult(answer, "Classification reason.")
@@ -244,7 +282,7 @@ def test_explicitly_leasable_type_uses_llm_result(answer):
         (criteria.TechnicalBicycleComponentCriterion, "# Technical bicycle components"),
         (criteria.StvzoEquipmentCriterion, "# StVZO-related equipment"),
         (criteria.FunctionalUnitWithBicycleCriterion, "# Functional units"),
-        (criteria.InstallableOnBicycleCriterion, "# Installation status"),
+        (criteria.PermanentlyMountedCriterion, "# Installation status"),
     ],
 )
 def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
@@ -257,7 +295,9 @@ def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
         '{"answer": "YES", "details": "Classification reason."}'
     )
 
-    result = asyncio.run(criterion_class(client).evaluate(request()))
+    result = asyncio.run(
+        criterion_class(client).evaluate(request(), PRODUCT_INFORMATION)
+    )
 
     assert result == CriterionResult(YES, "Classification reason.")
     assert prompt_heading in client.generate.await_args.kwargs["instructions"]
@@ -290,7 +330,9 @@ def test_special_rules_use_leasability_result(answer, leasable):
         }
     )
 
-    result = asyncio.run(criteria.SpecialRulesCriterion(client).evaluate(request()))
+    result = asyncio.run(
+        criteria.SpecialRulesCriterion(client).evaluate(request(), PRODUCT_INFORMATION)
+    )
 
     assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.")
     instructions = client.generate.await_args.kwargs["instructions"]
@@ -323,7 +365,11 @@ def test_special_rules_reject_contradictory_results(answer, leasable):
     )
 
     with pytest.raises(ValueError, match="invalid criterion response"):
-        asyncio.run(criteria.SpecialRulesCriterion(client).evaluate(request()))
+        asyncio.run(
+            criteria.SpecialRulesCriterion(client).evaluate(
+                request(), PRODUCT_INFORMATION
+            )
+        )
 
 
 def test_criterion_overrides_apply_only_to_one_call():
@@ -342,8 +388,8 @@ def test_criterion_overrides_apply_only_to_one_call():
         timeout_seconds=15,
     )
 
-    asyncio.run(criterion.evaluate(request(), config=override))
-    asyncio.run(criterion.evaluate(request()))
+    asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION, config=override))
+    asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION))
 
     assert client.generate.await_args_list[0].kwargs["config"] is override
     default_config = client.generate.await_args_list[1].kwargs["config"]

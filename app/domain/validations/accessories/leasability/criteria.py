@@ -9,6 +9,9 @@ from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleRe
 from app.domain.validation import (
     ValidationRequest,
 )
+from app.domain.validations.accessories.product_information import (
+    AccessoryProductInformation,
+)
 
 DEFAULT_MODELS = ("gpt-luna", "glm-5.3")
 
@@ -30,7 +33,7 @@ FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "functional_unit_with_bicycle.md"
 )
 
-INSTALLABLE_ON_BICYCLE_PROMPT_PATH = (
+PERMANENTLY_MOUNTED_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "permanently_mounted.md"
 )
 
@@ -79,17 +82,22 @@ def load_prompt(path: Path, response_model: type[BaseModel]) -> str:
     )
 
 
-def _product_prompt(request: ValidationRequest) -> str:
+def _product_prompt(
+    request: ValidationRequest,
+    product_information: AccessoryProductInformation,
+) -> str:
     product = request.product
     return json.dumps(
         {
             "brand": product.brand,
             "model": product.model,
-            "category": product.category,
-            "year": product.year,
-            "size": product.size,
-            "color": product.color,
-            "price": str(product.price) if product.price is not None else None,
+            "product_information": {
+                "summary": product_information.summary,
+                "sources": [
+                    {"title": source.title, "url": source.url}
+                    for source in product_information.sources
+                ],
+            },
         },
         ensure_ascii=False,
     )
@@ -98,13 +106,14 @@ def _product_prompt(request: ValidationRequest) -> str:
 async def _generate_structured_response(
     llm_client: LLMClient,
     request: ValidationRequest,
+    product_information: AccessoryProductInformation,
     prompt_path: Path,
     response_model: type[ResponseModel],
     config: ChatConfig | None,
 ) -> ResponseModel:
     selected_config = config or llm_client.config.with_overrides(models=DEFAULT_MODELS)
     response = await llm_client.generate(
-        _product_prompt(request),
+        _product_prompt(request, product_information),
         instructions=load_prompt(prompt_path, response_model),
         config=selected_config,
     )
@@ -121,11 +130,16 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             EXPLICITLY_NOT_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
             config,
@@ -140,11 +154,16 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             EXPLICITLY_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
             config,
@@ -159,11 +178,16 @@ class TechnicalBicycleComponentCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             TECHNICAL_BICYCLE_COMPONENT_PROMPT_PATH,
             _CriterionResponse,
             config,
@@ -178,11 +202,16 @@ class StvzoEquipmentCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             STVZO_EQUIPMENT_PROMPT_PATH,
             _CriterionResponse,
             config,
@@ -197,11 +226,16 @@ class FunctionalUnitWithBicycleCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH,
             _CriterionResponse,
             config,
@@ -209,19 +243,24 @@ class FunctionalUnitWithBicycleCriterion:
         return CriterionResult(result.answer, result.details)
 
 
-class InstallableOnBicycleCriterion:
-    id = "installable_on_bicycle"
+class PermanentlyMountedCriterion:
+    id = "permanently_mounted"
 
     def __init__(self, llm_client: LLMClient) -> None:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
-            INSTALLABLE_ON_BICYCLE_PROMPT_PATH,
+            product_information,
+            PERMANENTLY_MOUNTED_PROMPT_PATH,
             _CriterionResponse,
             config,
         )
@@ -235,11 +274,16 @@ class SpecialRulesCriterion:
         self._llm_client = llm_client
 
     async def evaluate(
-        self, request: ValidationRequest, *, config: ChatConfig | None = None
+        self,
+        request: ValidationRequest,
+        product_information: AccessoryProductInformation,
+        *,
+        config: ChatConfig | None = None,
     ) -> SpecialRuleResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
+            product_information,
             SPECIAL_RULES_PROMPT_PATH,
             _SpecialRulesResponse,
             config,

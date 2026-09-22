@@ -4,6 +4,9 @@ from app.adapters.llm import LLMClient
 from app.domain.criterion import CriterionAnswer, SpecialRuleResult
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationResult, ValidationStatus
+from app.domain.validations.accessories.product_information import (
+    AccessoryProductInformation,
+)
 from app.domain.validations.accessories.leasability.criteria import (
     ExplicitlyNotLeasableAccessoryTypeCriterion,
     ExplicitlyLeasableAccessoryTypeCriterion,
@@ -11,77 +14,107 @@ from app.domain.validations.accessories.leasability.criteria import (
     TechnicalBicycleComponentCriterion,
     StvzoEquipmentCriterion,
     FunctionalUnitWithBicycleCriterion,
-    InstallableOnBicycleCriterion,
+    PermanentlyMountedCriterion,
 )
 
 
 async def standard_leasability_strategy(
-    request: ValidationRequest, litellm_client: LLMClient
+    request: ValidationRequest,
+    litellm_client: LLMClient,
+    product_information: AccessoryProductInformation,
 ) -> ValidationResult:
     if (
         await ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client).evaluate(
-            request
+            request, product_information
         )
     ).answer is CriterionAnswer.YES:
-        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(
+            request, product_information
+        )
         return _result(_apply_special_rule(False, special))
 
     if (
-        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(request)
+        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
-        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(
+            request, product_information
+        )
         return _result(_apply_special_rule(True, special))
 
     if (
-        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(request)
+        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     if (
-        await StvzoEquipmentCriterion(litellm_client).evaluate(request)
+        await StvzoEquipmentCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     if (
-        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(request)
+        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     installable = (
-        await InstallableOnBicycleCriterion(litellm_client).evaluate(request)
+        await PermanentlyMountedCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer
     return _result(installable is CriterionAnswer.YES)
 
 
 async def bawu_leasability_strategy(
-    request: ValidationRequest, litellm_client: LLMClient
+    request: ValidationRequest,
+    litellm_client: LLMClient,
+    product_information: AccessoryProductInformation,
 ) -> ValidationResult:
     if (
         await ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client).evaluate(
-            request
+            request, product_information
         )
     ).answer is CriterionAnswer.YES:
-        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(
+            request, product_information
+        )
         return _result(_apply_special_rule(False, special))
 
     if (
-        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(request)
+        await ExplicitlyLeasableAccessoryTypeCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
-        special = await SpecialRulesCriterion(litellm_client).evaluate(request)
+        special = await SpecialRulesCriterion(litellm_client).evaluate(
+            request, product_information
+        )
         return _result(_apply_special_rule(True, special))
 
     if (
-        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(request)
+        await TechnicalBicycleComponentCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     if (
-        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(request)
+        await FunctionalUnitWithBicycleCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer is CriterionAnswer.YES:
         return _result(True)
 
     installable = (
-        await InstallableOnBicycleCriterion(litellm_client).evaluate(request)
+        await PermanentlyMountedCriterion(litellm_client).evaluate(
+            request, product_information
+        )
     ).answer
     return _result(installable is CriterionAnswer.YES)
 

@@ -18,6 +18,7 @@ from app.adapters.llm import (
     ModelsNotFoundError,
     NoulQuestion,
     ScoreQuestion,
+    UnsupportedLLMToolError,
 )
 
 
@@ -71,6 +72,7 @@ async def test_generate_fallback_and_request_overrides():
             instructions="Be brief",
             config=override,
             tools=({"type": "web_search"},),
+            tool_choice={"type": "web_search"},
         )
         assert result.text == "Hello"
         assert result.model == "actual-model"
@@ -83,10 +85,85 @@ async def test_generate_fallback_and_request_overrides():
     assert bodies[-1]["input"] == "Hello"
     assert bodies[-1]["instructions"] == "Be brief"
     assert bodies[-1]["tools"] == [{"type": "web_search"}]
+    assert bodies[-1]["tool_choice"] == {"type": "web_search"}
     assert bodies[-1]["store"] is False
     assert str(requests[-1].url) == "https://llm.example/v1/responses"
     assert requests[-1].headers["authorization"] == "Bearer secret"
     assert requests[-1].extensions["timeout"]["read"] == 3
+
+
+@pytest.mark.asyncio
+async def test_response_reports_tool_calls_and_citation_sources():
+    body = response("Product summary", with_tool_call=True)
+    body["output"][-1]["content"][0]["annotations"] = [
+        {
+            "type": "url_citation",
+            "url": "https://manufacturer.example/product",
+            "title": "Product page",
+            "start_index": 0,
+            "end_index": 7,
+        }
+    ]
+
+    def handle(request):
+        return httpx.Response(200, json=body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        result = await LiteLLMClient(http, config()).generate("hi")
+
+    assert result.tool_calls == ("web_search_call",)
+    assert len(result.sources) == 1
+    assert result.sources[0].url == "https://manufacturer.example/product"
+    assert result.sources[0].title == "Product page"
+
+
+@pytest.mark.asyncio
+async def test_explicit_unsupported_web_search_error_is_classified():
+    def handle(request):
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "message": "Model local-model does not support web_search"
+                }
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        with pytest.raises(UnsupportedLLMToolError) as error:
+            selected = LiteLLMConfig(
+                base_url="https://llm.example/v1", models=("local-model",)
+            )
+            await LiteLLMClient(http, selected).generate(
+                "hi", tools=({"type": "web_search"},)
+            )
+
+    assert error.value.model == "local-model"
+    assert error.value.tool == "web_search"
+    assert error.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_unsupported_tools_parameter_is_classified_for_web_search_request():
+    def handle(request):
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "message": "Tools are not supported for this model",
+                    "param": "tools",
+                }
+            },
+        )
+
+    selected = LiteLLMConfig(
+        base_url="https://llm.example/v1", models=("local-model",)
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        with pytest.raises(UnsupportedLLMToolError):
+            await LiteLLMClient(http, selected).generate(
+                "hi", tools=({"type": "web_search"},)
+            )
 
 
 @pytest.mark.asyncio
