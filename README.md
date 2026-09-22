@@ -107,13 +107,15 @@ application assembly connect external implementations to business behavior.
 Clients live in `app/adapters/llm`. `LiteLLMClient` is wired into accessory
 validation and targets **LiteLLM Proxy**, not the LiteLLM Python SDK. No additional
 SDK dependency is needed. It implements the `LLMClient` protocol for async text
-generation through LiteLLM's chat-completions endpoint.
+generation through LiteLLM's Responses API endpoint.
 
 Settings come from explicit constructor values, environment variables, then `.env`.
 Use the `LITELLM_` or `TYPESAFE_` prefixes shown in `.env.example`.
 The LiteLLM endpoint and baseline model list are required. Timeout defaults to 60
 seconds. Temperature and token limit are omitted unless configured, allowing the
-provider's defaults. Model names must belong to that endpoint.
+provider's defaults. Model names must belong to that endpoint. Responses are sent
+with `store=false`; tools are supplied only for calls that need them and must be
+supported by the selected model and provider.
 
 Inside an async function:
 
@@ -138,6 +140,13 @@ async with httpx.AsyncClient() as http:
         config=client.config.with_overrides(temperature=0.1, max_tokens=200),
     )
     print(response.text)
+
+    # Tools are opt-in per request and require support from the selected model.
+    current = await client.generate(
+        "What are today's main bicycle-industry stories?",
+        tools=({"type": "web_search"},),
+    )
+    print(current.text)
 ```
 
 The application creates one shared HTTP client, `litellm_client`, and `jev_client`

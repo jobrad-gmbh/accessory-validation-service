@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any
+from typing import Any, Literal, Mapping, Sequence
 
 import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -19,48 +19,54 @@ class LiteLLMConfig(ChatConfig):
     model_config = SettingsConfigDict(env_prefix="LITELLM_")
 
 
-class _Message(BaseModel):
+class _ContentPart(BaseModel):
     model_config = ConfigDict(strict=True)
-    content: str | None = None
+
+    type: str
+    text: str | None = None
     refusal: str | None = None
-    tool_calls: list[Any] | None = None
 
 
-class _Choice(BaseModel):
+class _OutputItem(BaseModel):
     model_config = ConfigDict(strict=True)
-    index: int = 0
-    message: _Message | None = None
-    delta: _Message | None = None
-    finish_reason: str | None = None
+
+    type: str
+    role: str | None = None
+    content: list[_ContentPart] | None = None
 
 
-class _Completion(BaseModel):
+class _Response(BaseModel):
     model_config = ConfigDict(strict=True)
-    choices: list[_Choice]
+
+    object: Literal["response"]
+    status: str
+    output: list[_OutputItem]
     model: str | None = None
+    error: dict[str, Any] | None = None
 
 
-def _decode(data: str | bytes) -> _Completion:
+def _decode(data: str | bytes) -> _Response:
     try:
-        return _Completion.model_validate_json(data)
+        return _Response.model_validate_json(data)
     except ValidationError:
-        raise LLMResponseError("Invalid chat completion response") from None
+        raise LLMResponseError("Invalid Responses API response") from None
 
 
-def _text(message: _Message | None) -> str:
-    if message is None:
-        raise LLMResponseError("Missing message content")
-    if message.refusal:
-        raise LLMResponseError("The model refused the request")
-    if message.tool_calls:
-        raise LLMResponseError("Tool calls are not supported by this text client")
-    return message.content or ""
-
-
-def _choice(completion: _Completion) -> _Choice:
-    if len(completion.choices) != 1 or completion.choices[0].index != 0:
-        raise LLMResponseError("Expected one completion choice")
-    return completion.choices[0]
+def _text(response: _Response) -> str:
+    if response.status != "completed" or response.error is not None:
+        raise LLMResponseError("Incomplete model response")
+    text_parts = []
+    for item in response.output:
+        if item.type != "message":
+            continue
+        for part in item.content or []:
+            if part.type == "refusal" and part.refusal:
+                raise LLMResponseError("The model refused the request")
+            if part.type == "output_text" and part.text:
+                text_parts.append(part.text)
+    if not text_parts:
+        raise LLMResponseError("Empty model response")
+    return "\n".join(text_parts)
 
 
 def _error_body(response: httpx.Response) -> dict[str, Any]:
@@ -73,7 +79,7 @@ def _error_body(response: httpx.Response) -> dict[str, Any]:
 
 
 class LiteLLMClient:
-    """Text generation through LiteLLM Proxy's chat-completions endpoint."""
+    """Text generation through LiteLLM Proxy's Responses API endpoint."""
 
     def __init__(
         self,
@@ -107,21 +113,26 @@ class LiteLLMClient:
         instructions: str,
         config: ChatConfig,
         model: str,
+        tools: Sequence[Mapping[str, Any]],
     ) -> dict[str, Any]:
-        messages = []
+        payload: dict[str, Any] = {
+            "model": model,
+            "input": prompt,
+            "store": False,
+        }
         if instructions:
-            messages.append({"role": "system", "content": instructions})
-        messages.append({"role": "user", "content": prompt})
-        payload: dict[str, Any] = {"model": model, "messages": messages}
+            payload["instructions"] = instructions
+        if tools:
+            payload["tools"] = [dict(tool) for tool in tools]
         if config.temperature is not None:
             payload["temperature"] = config.temperature
         if config.max_tokens is not None:
-            payload["max_tokens"] = config.max_tokens
+            payload["max_output_tokens"] = config.max_tokens
         headers = {"Accept": "application/json"}
         if config.api_key is not None:
             headers["Authorization"] = f"Bearer {config.api_key.get_secret_value()}"
         return {
-            "url": f"{str(config.base_url).rstrip('/')}/chat/completions",
+            "url": f"{str(config.base_url).rstrip('/')}/responses",
             "headers": headers,
             "json": payload,
             "timeout": httpx.Timeout(config.timeout_seconds),
@@ -142,13 +153,14 @@ class LiteLLMClient:
         *,
         instructions: str = "",
         config: ChatConfig | None = None,
+        tools: Sequence[Mapping[str, Any]] = (),
     ) -> LLMResponse:
         selected = config if config is not None else self.config
         for model in selected.models:
             try:
                 async with asyncio.timeout(selected.timeout_seconds):
                     response = await self._http.post(
-                        **self._request(prompt, instructions, selected, model)
+                        **self._request(prompt, instructions, selected, model, tools)
                     )
             except (TimeoutError, httpx.TimeoutException):
                 raise LLMTimeoutError("LLM request timed out") from None
@@ -157,10 +169,7 @@ class LiteLLMClient:
             if self._model_not_found(response):
                 continue
             self._check_status(response)
-            completion = _decode(response.content)
-            choice = _choice(completion)
-            content = _text(choice.message)
-            if choice.finish_reason != "stop" or not content:
-                raise LLMResponseError("Empty or incomplete completion")
-            return LLMResponse(content, completion.model or model, choice.finish_reason)
+            result = _decode(response.content)
+            content = _text(result)
+            return LLMResponse(content, result.model or model, result.status)
         raise ModelsNotFoundError(selected.models)

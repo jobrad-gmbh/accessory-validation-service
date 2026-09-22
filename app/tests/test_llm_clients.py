@@ -27,12 +27,24 @@ def config(cls=LiteLLMConfig, **overrides):
     )
 
 
-def completion(text="Hello", finish="stop"):
+def response(text="Hello", status="completed", *, with_tool_call=False):
+    output = []
+    if with_tool_call:
+        output.append(
+            {"type": "web_search_call", "id": "ws_123", "status": "completed"}
+        )
+    output.append(
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": text, "annotations": []}],
+        }
+    )
     return {
+        "object": "response",
+        "status": status,
         "model": "actual-model",
-        "choices": [
-            {"index": 0, "message": {"content": text}, "finish_reason": finish},
-        ],
+        "output": output,
     }
 
 
@@ -47,7 +59,7 @@ async def test_generate_fallback_and_request_overrides():
                 400,
                 json={"error": {"message": "Invalid model name passed in model=first"}},
             )
-        return httpx.Response(200, json=completion())
+        return httpx.Response(200, json=response())
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         client = LiteLLMClient(http, config(api_key="secret"))
@@ -55,17 +67,24 @@ async def test_generate_fallback_and_request_overrides():
             temperature=0.2, max_tokens=50, timeout_seconds=3
         )
         result = await client.generate(
-            "Hello", instructions="Be brief", config=override
+            "Hello",
+            instructions="Be brief",
+            config=override,
+            tools=({"type": "web_search"},),
         )
         assert result.text == "Hello"
         assert result.model == "actual-model"
+        assert result.status == "completed"
         assert client.config.temperature is None
     bodies = [json.loads(r.content) for r in requests]
     assert [b["model"] for b in bodies] == ["first", "second"]
     assert bodies[-1]["temperature"] == 0.2
-    assert bodies[-1]["max_tokens"] == 50
-    assert bodies[-1]["messages"][0] == {"role": "system", "content": "Be brief"}
-    assert str(requests[-1].url) == "https://llm.example/v1/chat/completions"
+    assert bodies[-1]["max_output_tokens"] == 50
+    assert bodies[-1]["input"] == "Hello"
+    assert bodies[-1]["instructions"] == "Be brief"
+    assert bodies[-1]["tools"] == [{"type": "web_search"}]
+    assert bodies[-1]["store"] is False
+    assert str(requests[-1].url) == "https://llm.example/v1/responses"
     assert requests[-1].headers["authorization"] == "Bearer secret"
     assert requests[-1].extensions["timeout"]["read"] == 3
 
@@ -107,11 +126,35 @@ async def test_http_errors_do_not_fallback_or_leak_body(status):
 @pytest.mark.parametrize(
     "body",
     [
-        completion("", "stop"),
-        completion("partial", "length"),
-        {"choices": []},
-        {"choices": [{"message": {"content": 123}, "finish_reason": "stop"}]},
-        {"choices": [{"message": {"refusal": "No"}, "finish_reason": "stop"}]},
+        response(""),
+        response("partial", "incomplete"),
+        {"object": "response", "status": "completed", "output": []},
+        {
+            "object": "response",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": 123}],
+                }
+            ],
+        },
+        {
+            "object": "response",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "refusal", "refusal": "No"}],
+                }
+            ],
+        },
+        {
+            "object": "response",
+            "status": "failed",
+            "output": [],
+            "error": {"code": "server_error", "message": "provider detail"},
+        },
     ],
 )
 async def test_invalid_responses(body):
@@ -150,7 +193,7 @@ async def test_transport_errors_and_cancellation(error, expected):
 async def test_total_generation_timeout():
     async def handle(request):
         await asyncio.sleep(1)
-        return httpx.Response(200, json=completion())
+        return httpx.Response(200, json=response())
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(LLMTimeoutError):
@@ -346,7 +389,7 @@ async def test_concurrent_overrides_are_isolated():
     async def handle(request):
         bodies.append(json.loads(request.content))
         await asyncio.sleep(0)
-        return httpx.Response(200, json=completion())
+        return httpx.Response(200, json=response(with_tool_call=True))
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         client = LiteLLMClient(http, config())
@@ -361,3 +404,4 @@ async def test_concurrent_overrides_are_isolated():
     assert bodies[0]["temperature"] == 0
     assert bodies[1]["model"] == "first"
     assert "temperature" not in bodies[1]
+    assert all("tools" not in body for body in bodies)

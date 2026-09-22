@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 from app.adapters.llm.config import ChatConfig
 
@@ -8,7 +8,7 @@ from app.adapters.llm.config import ChatConfig
 class LLMResponse:
     text: str
     model: str
-    finish_reason: str
+    status: str
 
 
 class LLMClient(Protocol):
@@ -21,4 +21,5 @@ class LLMClient(Protocol):
         *,
         instructions: str = "",
         config: ChatConfig | None = None,
+        tools: Sequence[Mapping[str, Any]] = (),
     ) -> LLMResponse: ...
