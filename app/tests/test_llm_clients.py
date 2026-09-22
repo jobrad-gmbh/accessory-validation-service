@@ -71,8 +71,13 @@ async def test_generate_fallback_and_request_overrides():
             "Hello",
             instructions="Be brief",
             config=override,
-            tools=({"type": "web_search"},),
-            tool_choice={"type": "web_search"},
+            tools=(
+                {
+                    "type": "openrouter:web_search",
+                    "parameters": {"engine": "auto", "max_results": 5},
+                },
+            ),
+            tool_choice="required",
         )
         assert result.text == "Hello"
         assert result.model == "actual-model"
@@ -84,8 +89,13 @@ async def test_generate_fallback_and_request_overrides():
     assert bodies[-1]["max_output_tokens"] == 50
     assert bodies[-1]["input"] == "Hello"
     assert bodies[-1]["instructions"] == "Be brief"
-    assert bodies[-1]["tools"] == [{"type": "web_search"}]
-    assert bodies[-1]["tool_choice"] == {"type": "web_search"}
+    assert bodies[-1]["tools"] == [
+        {
+            "type": "openrouter:web_search",
+            "parameters": {"engine": "auto", "max_results": 5},
+        }
+    ]
+    assert bodies[-1]["tool_choice"] == "required"
     assert bodies[-1]["store"] is False
     assert str(requests[-1].url) == "https://llm.example/v1/responses"
     assert requests[-1].headers["authorization"] == "Bearer secret"
@@ -162,7 +172,7 @@ async def test_unsupported_tools_parameter_is_classified_for_web_search_request(
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(UnsupportedLLMToolError):
             await LiteLLMClient(http, selected).generate(
-                "hi", tools=({"type": "web_search"},)
+                "hi", tools=({"type": "openrouter:web_search"},)
             )
 
 
@@ -294,7 +304,8 @@ def test_env_defaults_and_explicit_values(monkeypatch):
         defaults.with_overrides(typo=1)
 
 
-def test_litellm_requires_configured_models(monkeypatch):
+def test_litellm_requires_configured_models(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("LITELLM_BASE_URL", "https://gateway.example/v1")
     monkeypatch.delenv("LITELLM_MODELS", raising=False)
 

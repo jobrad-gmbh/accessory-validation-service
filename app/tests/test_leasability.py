@@ -127,6 +127,11 @@ def test_special_rules_preserve_type_specific_outcomes(
     assert execution.product is submitted.product
     assert execution.validation_id == "accessory_leasability"
     assert calls == ([ORDER[0]] if excluded else list(ORDER[:2])) + ["special_rules"]
+    assert execution.result.details == (
+        special.details
+        if special.answer is YES
+        else "Deterministic criterion answer."
+    )
 
 
 @pytest.mark.parametrize("is_bawu", [False, True])
@@ -151,9 +156,22 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
     assert execution.result.status is (
         ValidationStatus.PASSED if passed else ValidationStatus.REJECTED
     )
-    assert execution.result.details == (
-        "The accessory is leasable." if passed else "The accessory is not leasable."
+    assert execution.result.details == "Deterministic criterion answer."
+
+
+def test_decisive_criterion_provides_validation_details(monkeypatch):
+    calls = []
+    decisive = CriterionResult(YES, "The rack is a technical bicycle component.")
+    criteria_with_answers(
+        monkeypatch,
+        {"technical_bicycle_component": decisive},
+        calls,
     )
+
+    execution = asyncio.run(validation().validate(request()))
+
+    assert execution.result.status is ValidationStatus.PASSED
+    assert execution.result.details == decisive.details
 
 
 def test_criterion_failures_are_technical_errors(monkeypatch):
@@ -205,10 +223,7 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
     assert "The object must match this JSON Schema" in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "details"}
-    assert client.generate.await_args.kwargs["config"].models == (
-        "gpt-luna",
-        "glm-5.3",
-    )
+    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
 
 
 def test_prompt_output_schema_is_selected_per_criterion():
@@ -270,10 +285,7 @@ def test_explicitly_leasable_type_uses_llm_result(answer):
     instructions = client.generate.await_args.kwargs["instructions"]
     assert "# Explicitly leasable accessory types" in instructions
     assert "Bike lock" in instructions
-    assert client.generate.await_args.kwargs["config"].models == (
-        "gpt-luna",
-        "glm-5.3",
-    )
+    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
 
 
 @pytest.mark.parametrize(
@@ -301,10 +313,7 @@ def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
 
     assert result == CriterionResult(YES, "Classification reason.")
     assert prompt_heading in client.generate.await_args.kwargs["instructions"]
-    assert client.generate.await_args.kwargs["config"].models == (
-        "gpt-luna",
-        "glm-5.3",
-    )
+    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
 
 
 @pytest.mark.parametrize(
@@ -393,7 +402,7 @@ def test_criterion_overrides_apply_only_to_one_call():
 
     assert client.generate.await_args_list[0].kwargs["config"] is override
     default_config = client.generate.await_args_list[1].kwargs["config"]
-    assert default_config.models == ("gpt-luna", "glm-5.3")
+    assert default_config.models == criteria.DEFAULT_MODELS
     assert default_config.temperature == 0.5
     assert client.config.models == ("client-default",)
     assert client.config.temperature == 0.5

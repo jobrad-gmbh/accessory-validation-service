@@ -15,6 +15,10 @@ from app.domain.errors import (
 from app.domain.product import ProductInput
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / "product_information.md"
+WEB_SEARCH_TOOL = {
+    "type": "web_search",
+    "parameters": {"engine": "auto", "max_results": 5},
+}
 
 
 @dataclass(frozen=True)
@@ -38,8 +42,8 @@ class AccessoryProductInformationService:
         use_web_search: bool = True,
         config: ChatConfig | None = None,
     ) -> AccessoryProductInformation:
-        tools = ({"type": "web_search"},) if use_web_search else ()
-        tool_choice = {"type": "web_search"} if use_web_search else None
+        tools = (WEB_SEARCH_TOOL,) if use_web_search else ()
+        tool_choice = "required" if use_web_search else None
         try:
             response = await self._llm_client.generate(
                 _product_prompt(product),

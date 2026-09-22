@@ -85,8 +85,13 @@ async def test_retrieves_condensed_information_with_required_web_search():
     assert result.used_web_search is True
     assert result.sources == (source,)
     call = client.calls[0]
-    assert call["tools"] == ({"type": "web_search"},)
-    assert call["tool_choice"] == {"type": "web_search"}
+    assert call["tools"] == (
+        {
+            "type": "web_search",
+            "parameters": {"engine": "auto", "max_results": 5},
+        },
+    )
+    assert call["tool_choice"] == "required"
     assert json.loads(str(call["prompt"])) == {
         "brand": "Ortlieb",
         "model": "Quick Rack",

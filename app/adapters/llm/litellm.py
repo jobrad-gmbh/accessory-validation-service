@@ -198,7 +198,10 @@ class LiteLLMClient:
             names_tool_field = error_parameter in {"tools", "tool_choice"} or any(
                 field in message for field in ("tool_choice", "tools", "tool use")
             )
-            if requested_tool_types == {"web_search"} and unsupported and (
+            if requested_tool_types in (
+                {"web_search"},
+                {"openrouter:web_search"},
+            ) and unsupported and (
                 names_web_search or names_tool_field
             ):
                 raise UnsupportedLLMToolError(

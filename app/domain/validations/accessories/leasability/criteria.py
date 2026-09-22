@@ -13,7 +13,7 @@ from app.domain.validations.accessories.product_information import (
     AccessoryProductInformation,
 )
 
-DEFAULT_MODELS = ("gpt-luna", "glm-5.3")
+DEFAULT_MODELS = ("gpt-5.6-luna", "glm-5.3")
 
 EXPLICITLY_NOT_LEASABLE_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "explicitly_not_leasable_type.md"
