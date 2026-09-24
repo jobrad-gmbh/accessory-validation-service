@@ -17,6 +17,10 @@ from app.adapters.llm.errors import (
     UnsupportedLLMToolError,
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
+from app.adapters.llm.recording import (
+    LLMCall,
+    RecordingLLMClient,
+)
 
 __all__ = [
     "ChatConfig",
@@ -27,6 +31,7 @@ __all__ = [
     "ChoiceQuestion",
     "NoulQuestion",
     "ScoreQuestion",
+    "LLMCall",
     "LLMClient",
     "LLMConfig",
     "LLMError",
@@ -37,5 +42,6 @@ __all__ = [
     "LiteLLMClient",
     "LiteLLMConfig",
     "ModelsNotFoundError",
+    "RecordingLLMClient",
     "UnsupportedLLMToolError",
 ]

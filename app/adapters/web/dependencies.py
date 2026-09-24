@@ -7,8 +7,11 @@ from app.domain.validations.accessories.suite import build_accessory_validation_
 
 
 def get_validation_service(request: Request) -> ProductValidationService:
-    """Build the accessory suite with the shared LiteLLM client."""
-    return build_accessory_validation_service(request.app.state.litellm_client)
+    """Build the accessory suite with its LLM client and configured repository."""
+    return build_accessory_validation_service(
+        request.app.state.litellm_client,
+        repository=request.app.state.validation_report_repository,
+    )
 
 
 ValidationServiceDependency = Annotated[

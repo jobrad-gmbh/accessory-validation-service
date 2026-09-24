@@ -8,6 +8,7 @@ from app.domain.validation import (
     Validation,
     ValidationRequest,
 )
+from app.domain.validation_repository import ValidationReportRepository
 from app.domain.validation_results import (
     ReportStatus,
     ValidationExecution,
@@ -23,8 +24,15 @@ class ProductValidationService:
     stop execution. Resolution and strategies belong to individual checks.
     """
 
-    def __init__(self, validations: Sequence[Validation]) -> None:
+    def __init__(
+        self,
+        validations: Sequence[Validation],
+        repository: ValidationReportRepository,
+    ) -> None:
+        if repository is None:
+            raise ValidationConfigurationError("Validation report repository is required")
         self._validations = tuple(validations)
+        self._repository = repository
         ids = [validation.id for validation in self._validations]
         if not ids or any(not value.strip() for value in ids) or len(ids) != len(set(ids)):
             raise ValidationConfigurationError(
@@ -60,8 +68,10 @@ class ProductValidationService:
             status = ReportStatus.VALID
         else:
             status = ReportStatus.UNDETERMINED
-        return ValidationReport(
+        report = ValidationReport(
             product=request.product,
             status=status,
             validations=tuple(executions),
         )
+        await self._repository.save(report)
+        return report

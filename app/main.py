@@ -1,11 +1,15 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 
-from app.adapters.llm import JevClient, LiteLLMClient
+from app.adapters.llm import (
+    JevClient,
+    LiteLLMClient,
+    RecordingLLMClient,
+)
 from app.adapters.web.exceptions import (
     validation_configuration_exception_handler,
     validation_exception_handler,
@@ -19,14 +23,25 @@ from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
 )
+from app.domain.validation_repository import ValidationReportRepository
 
 setup_logging()
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
+    repository: ValidationReportRepository | None = getattr(
+        application.state, "validation_report_repository", None
+    )
+    if repository is None:
+        raise ValidationConfigurationError(
+            "Repository is required; configure "
+            "app.state.validation_report_repository before startup"
+        )
     async with httpx.AsyncClient() as http_client:
-        application.state.litellm_client = LiteLLMClient(http_client)
+        application.state.litellm_client = RecordingLLMClient(
+            LiteLLMClient(http_client)
+        )
         application.state.jev_client = JevClient(http_client)
         yield
 
@@ -58,6 +73,5 @@ async def execution_exception_handler(
     return await validation_execution_exception_handler(request, exc)
 
 
-# Include routers
 app.include_router(system_router)
 app.include_router(validation_router, prefix=settings.API_V1_BASE_URL)

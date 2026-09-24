@@ -1,9 +1,12 @@
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.adapters.web.schemas import AccessoryInput
+from app.main import app, lifespan
 from app.domain.errors import (
+    ValidationConfigurationError,
     ValidationExecutionError,
 )
 from app.domain.product import (
@@ -17,6 +20,7 @@ from app.domain.validation import (
     ValidationRequest,
 )
 from app.domain.validation_results import (
+    ReportStatus,
     ValidationExecution,
     ValidationResult,
     ValidationStatus,
@@ -119,10 +123,92 @@ def test_service_rejects_a_validation_execution_for_another_product():
                 result=validation_result(),
             )
 
-    service = ProductValidationService([WrongProductValidation()])
+    service = ProductValidationService([WrongProductValidation()], AsyncMock())
 
     with pytest.raises(ValidationExecutionError, match="failed"):
         asyncio.run(service.validate(ValidationRequest(product=requested_product)))
+
+
+
+def test_service_saves_complete_report_before_returning():
+    repository = AsyncMock()
+
+    class Check(Validation):
+        id = "check"
+
+        async def evaluate_result(self, request):
+            return ValidationResult(
+                status=ValidationStatus.REJECTED,
+                details="Not leasable.",
+            )
+
+    class OtherCheck(Validation):
+        id = "other_check"
+
+        async def evaluate_result(self, request):
+            return validation_result()
+
+    submitted = product()
+    report = asyncio.run(
+        ProductValidationService([Check(), OtherCheck()], repository).validate(
+            ValidationRequest(product=submitted)
+        )
+    )
+
+    repository.save.assert_awaited_once_with(report)
+    assert report.product is submitted
+    assert report.status is ReportStatus.INVALID
+    assert [execution.validation_id for execution in report.validations] == [
+        "check", "other_check"
+    ]
+    assert report.validations[0].result.details == "Not leasable."
+
+
+def test_service_does_not_save_incomplete_report():
+    repository = AsyncMock()
+
+    class FailingCheck(Validation):
+        id = "failing_check"
+
+        async def evaluate_result(self, request):
+            raise RuntimeError("No response")
+
+    with pytest.raises(ValidationExecutionError):
+        asyncio.run(
+            ProductValidationService([FailingCheck()], repository).validate(
+                ValidationRequest(product=product())
+            )
+        )
+    repository.save.assert_not_awaited()
+
+
+def test_service_rejects_missing_repository():
+    with pytest.raises(ValidationConfigurationError, match="repository is required"):
+        ProductValidationService([], None)
+
+
+def test_app_startup_rejects_missing_repository():
+    with pytest.raises(ValidationConfigurationError, match="repository is required"):
+        asyncio.run(lifespan(app).__aenter__())
+
+
+def test_service_does_not_return_report_when_save_fails():
+    repository = AsyncMock()
+    repository.save.side_effect = RuntimeError("Database unavailable")
+
+    class Check(Validation):
+        id = "check"
+
+        async def evaluate_result(self, request):
+            return validation_result()
+
+    with pytest.raises(RuntimeError, match="Database unavailable"):
+        asyncio.run(
+            ProductValidationService([Check()], repository).validate(
+                ValidationRequest(product=product())
+            )
+        )
+    repository.save.assert_awaited_once()
 
 
 def test_api_preserves_product_context_and_defaults_to_non_bawu():

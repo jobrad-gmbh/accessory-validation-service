@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import final
+from uuid import uuid4
 
+from app.domain.execution_context import validation_execution_scope
 from app.domain.product import Product, ProductContext
 from app.domain.validation_results import (
     ValidationExecution,
@@ -28,8 +30,11 @@ class Validation(ABC):
 
     @final
     async def validate(self, request: ValidationRequest) -> ValidationExecution:
-        result = await self.evaluate_result(request)
+        execution_id = uuid4()
+        with validation_execution_scope(execution_id):
+            result = await self.evaluate_result(request)
         return ValidationExecution(
+            id=execution_id,
             product=request.product,
             validation_id=self.id,
             result=result,

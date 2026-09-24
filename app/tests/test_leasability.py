@@ -183,7 +183,7 @@ def test_criterion_failures_are_technical_errors(monkeypatch):
         "evaluate",
         AsyncMock(side_effect=failure),
     )
-    service = ProductValidationService([validation()])
+    service = ProductValidationService([validation()], AsyncMock())
     with pytest.raises(
         ValidationExecutionError, match="Validation accessory_leasability failed"
     ) as exc:
