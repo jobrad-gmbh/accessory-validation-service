@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import TypeVar
 
@@ -13,7 +14,7 @@ from app.domain.validations.accessories.product_information import (
     AccessoryProductInformation,
 )
 
-DEFAULT_MODELS = ("gpt-5.6-luna", "glm-5.3")
+DEFAULT_MODELS = ("glm-5.3", "gpt-6-luna")
 
 EXPLICITLY_NOT_LEASABLE_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "explicitly_not_leasable_type.md"
@@ -66,6 +67,8 @@ class _SpecialRulesResponse(_CriterionResponse):
 
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
+_JSON_CODE_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL | re.IGNORECASE)
+
 
 def load_prompt(path: Path, response_model: type[BaseModel]) -> str:
     """Load criterion instructions and append their response contract."""
@@ -76,7 +79,8 @@ def load_prompt(path: Path, response_model: type[BaseModel]) -> str:
     return (
         f"{prompt}\n\n"
         "# Output\n\n"
-        "Return exactly one JSON object and no surrounding text. "
+        "Return exactly one JSON object and no surrounding text. No json fences. "
+        "Nothing can wrap the JSON object. The JSON object must be valid and parseable. "
         "The object must match this JSON Schema:\n\n"
         f"```json\n{schema}\n```"
     )
@@ -117,8 +121,12 @@ async def _generate_structured_response(
         instructions=load_prompt(prompt_path, response_model),
         config=selected_config,
     )
+    text = response.text.strip()
+    fence = _JSON_CODE_FENCE.fullmatch(text)
+    if fence is not None:
+        text = fence.group(1).strip()
     try:
-        return response_model.model_validate_json(response.text)
+        return response_model.model_validate_json(text)
     except ValidationError:
         raise ValueError("LLM returned an invalid criterion response") from None
 
