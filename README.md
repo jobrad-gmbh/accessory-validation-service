@@ -6,11 +6,26 @@ report containing their business results.
 ## Run locally
 
 ```bash
+docker compose up -d postgres
 uv sync --locked
+uv run alembic upgrade head
 uv run python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 The API documentation is available at <http://127.0.0.1:8000/docs>.
+Set `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.env` for the
+Compose database. `DATABASE_URL` reuses those values to connect local commands
+through `localhost`; set it differently if PostgreSQL is elsewhere. To run both the
+database and API in containers, fill in `.env` with your LiteLLM and Jev
+settings, then use `docker compose up --build`. Compose builds the API's database
+URL from the PostgreSQL values using the `postgres` service hostname. The API
+container applies migrations before starting.
+
+Products and validation executions are saved atomically. Criterion results are
+returned in the validation response but are not stored separately. LLM requests
+are saved as they happen, including failed requests.
+Their `validation_execution_id` can be used to join successful validations to
+their requests. Requests from a failed validation may have no matching execution.
 
 ## Validate an accessory
 
@@ -78,6 +93,7 @@ app/
 - `domain/validation.py` defines the validation request and the `Validation` base
   class. The base class wraps each business result in an execution.
 - `domain/validation_results.py` owns results, executions, and reports.
+- `adapters/persistence/postgresql/` implements PostgreSQL storage; `alembic/` contains schema migrations.
 - `domain/criterion.py` defines criterion results and YES/NO/UNKNOWN answers.
 - `domain/validations/accessories/leasability/criteria.py` contains the concrete
   criterion classes used by accessory leasability.

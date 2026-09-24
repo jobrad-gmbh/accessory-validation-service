@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.adapters.persistence.postgresql import PostgresLLMRequestRepository, PostgresValidationReportRepository
 from app.adapters.llm import (
     JevClient,
     LiteLLMClient,
@@ -23,27 +25,24 @@ from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
 )
-from app.domain.validation_repository import ValidationReportRepository
 
 setup_logging()
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
-    repository: ValidationReportRepository | None = getattr(
-        application.state, "validation_report_repository", None
-    )
-    if repository is None:
-        raise ValidationConfigurationError(
-            "Repository is required; configure "
-            "app.state.validation_report_repository before startup"
-        )
-    async with httpx.AsyncClient() as http_client:
-        application.state.litellm_client = RecordingLLMClient(
-            LiteLLMClient(http_client)
-        )
-        application.state.jev_client = JevClient(http_client)
-        yield
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    try:
+        application.state.validation_report_repository = PostgresValidationReportRepository(engine)
+        llm_request_repository = PostgresLLMRequestRepository(engine)
+        async with httpx.AsyncClient() as http_client:
+            application.state.litellm_client = RecordingLLMClient(
+                LiteLLMClient(http_client), llm_request_repository
+            )
+            application.state.jev_client = JevClient(http_client)
+            yield
+    finally:
+        await engine.dispose()
 
 
 app = FastAPI(

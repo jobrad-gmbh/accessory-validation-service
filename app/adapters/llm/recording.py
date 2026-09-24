@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 from uuid import UUID, uuid4
 
 from app.adapters.llm.client import LLMClient, LLMResponse
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
-class LLMCall:
+class LLMRequest:
     """One attempted generation, associated with the validation that caused it."""
 
     validation_execution_id: UUID | None
@@ -30,14 +30,21 @@ class LLMCall:
     id: UUID = field(default_factory=uuid4)
 
 
+class LLMRequestRepository(Protocol):
+    async def save(self, request: LLMRequest) -> None: ...
+
+
 class RecordingLLMClient:
     """Record every generation of the wrapped client, successful or failed.
 
     A failing sink is logged and never changes the outcome of the generation.
     """
 
-    def __init__(self, inner_llm_client: LLMClient) -> None:
+    def __init__(
+        self, inner_llm_client: LLMClient, repository: LLMRequestRepository
+    ) -> None:
         self.inner_llm_client = inner_llm_client
+        self._repository = repository
 
     @property
     def config(self) -> ChatConfig:
@@ -70,7 +77,7 @@ class RecordingLLMClient:
             raise
         finally:
             await self._record(
-                LLMCall(
+                LLMRequest(
                     validation_execution_id=current_validation_execution_id(),
                     prompt=prompt,
                     instructions=instructions,
@@ -86,8 +93,8 @@ class RecordingLLMClient:
                 )
             )
 
-    async def _record(self, call: LLMCall) -> None:
+    async def _record(self, request: LLMRequest) -> None:
         try:
-            pass  # TODO: record the call in a database or other persistent store
+            await self._repository.save(request)
         except Exception:
-            logger.exception("Could not record LLM call %s", call.id)
+            logger.exception("Could not record LLM request %s", request.id)

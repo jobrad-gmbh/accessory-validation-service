@@ -5,10 +5,13 @@ description = "Validate whether accessories are eligible for leasing."
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
 dependencies = [
+    "alembic>=1.16,<2",
     "fastapi==0.116.1",
     "httpx==0.28.1",
+    "psycopg[binary]>=3.2,<4",
     "pydantic==2.11.7",
     "pydantic-settings==2.10.1",
+    "sqlalchemy[asyncio]>=2.0,<3",
     "uvicorn==0.35.0",
 ]
 

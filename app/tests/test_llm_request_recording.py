@@ -36,8 +36,8 @@ def request():
     )
 
 
-class CallsLLMTwice(Validation):
-    id = "calls_llm_twice"
+class MakesTwoLLMRequests(Validation):
+    id = "makes_two_llm_requests"
 
     def __init__(self, llm_client):
         self._llm_client = llm_client
@@ -49,59 +49,65 @@ class CallsLLMTwice(Validation):
 
 
 def recorded_client(**generate):
-    calls = []
-    client = RecordingLLMClient(inner_client(**generate))
-
-    async def record(call):
-        calls.append(call)
-
-    client._record = record
-    return client, calls
+    requests = []
+    repository = AsyncMock()
+    repository.save.side_effect = lambda request: requests.append(request)
+    client = RecordingLLMClient(inner_client(**generate), repository)
+    return client, requests
 
 
-def test_calls_are_associated_with_the_validation_execution():
-    client, calls = recorded_client(return_value=RESPONSE)
+def test_requests_are_associated_with_the_validation_execution():
+    client, requests = recorded_client(return_value=RESPONSE)
 
-    execution = asyncio.run(CallsLLMTwice(client).validate(request()))
+    execution = asyncio.run(MakesTwoLLMRequests(client).validate(request()))
 
-    assert [call.prompt for call in calls] == ["first", "second"]
-    assert all(call.validation_execution_id == execution.id for call in calls)
-    assert calls[0].response is RESPONSE
-    assert calls[0].instructions == "Be brief"
-    assert calls[0].requested_models == ("default-model",)
-    assert calls[0].instructions_hash != calls[1].instructions_hash
+    assert [request.prompt for request in requests] == ["first", "second"]
+    assert all(request.validation_execution_id == execution.id for request in requests)
+    assert requests[0].response is RESPONSE
+    assert requests[0].instructions == "Be brief"
+    assert requests[0].requested_models == ("default-model",)
+    assert requests[0].instructions_hash != requests[1].instructions_hash
     assert current_validation_execution_id() is None
 
 
-def test_calls_outside_a_validation_have_no_execution_id():
-    client, calls = recorded_client(return_value=RESPONSE)
+def test_requests_outside_a_validation_have_no_execution_id():
+    client, requests = recorded_client(return_value=RESPONSE)
 
     assert asyncio.run(client.generate("hello")) is RESPONSE
-    assert calls[0].validation_execution_id is None
+    assert requests[0].validation_execution_id is None
 
 
-def test_failed_calls_are_recorded_and_reraised():
+def test_failed_requests_are_recorded_and_reraised():
     failure = RuntimeError("Provider unavailable")
-    client, calls = recorded_client(side_effect=failure)
+    client, requests = recorded_client(side_effect=failure)
 
     with pytest.raises(RuntimeError, match="Provider unavailable"):
         asyncio.run(client.generate("hello"))
 
-    assert calls[0].response is None
-    assert "Provider unavailable" in calls[0].error
+    assert requests[0].response is None
+    assert "Provider unavailable" in requests[0].error
+
+
+def test_storage_failure_does_not_change_generation_result():
+    repository = AsyncMock()
+    repository.save.side_effect = RuntimeError("Database unavailable")
+    client = RecordingLLMClient(inner_client(return_value=RESPONSE), repository)
+
+    assert asyncio.run(client.generate("hello")) is RESPONSE
+    repository.save.assert_awaited_once()
 
 
 def test_concurrent_validations_keep_their_own_execution_id():
-    client, calls = recorded_client(return_value=RESPONSE)
+    client, requests = recorded_client(return_value=RESPONSE)
 
     async def run_both():
         return await asyncio.gather(
-            CallsLLMTwice(client).validate(request()),
-            CallsLLMTwice(client).validate(request()),
+            MakesTwoLLMRequests(client).validate(request()),
+            MakesTwoLLMRequests(client).validate(request()),
         )
 
     first, second = asyncio.run(run_both())
 
-    ids = [call.validation_execution_id for call in calls]
+    ids = [request.validation_execution_id for request in requests]
     assert ids.count(first.id) == 2
     assert ids.count(second.id) == 2

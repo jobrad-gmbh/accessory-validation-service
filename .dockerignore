@@ -1,6 +1,9 @@
 **/*
 
 !app/
+!alembic/
+!alembic/**
+!alembic.ini
 !uv.lock
 !pyproject.toml
 !entrypoint.sh

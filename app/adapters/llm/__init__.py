@@ -18,7 +18,7 @@ from app.adapters.llm.errors import (
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
 from app.adapters.llm.recording import (
-    LLMCall,
+    LLMRequest,
     RecordingLLMClient,
 )
 
@@ -31,7 +31,7 @@ __all__ = [
     "ChoiceQuestion",
     "NoulQuestion",
     "ScoreQuestion",
-    "LLMCall",
+    "LLMRequest",
     "LLMClient",
     "LLMConfig",
     "LLMError",

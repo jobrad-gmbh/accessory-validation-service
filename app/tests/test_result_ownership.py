@@ -5,6 +5,7 @@ import pytest
 
 from app.adapters.web.schemas import AccessoryInput, ValidationReportResponse
 from app.main import app, lifespan
+from app.adapters.persistence.postgresql import PostgresValidationReportRepository
 from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.errors import (
     ValidationConfigurationError,
@@ -192,9 +193,14 @@ def test_service_rejects_missing_repository():
         ProductValidationService([], None)
 
 
-def test_app_startup_rejects_missing_repository():
-    with pytest.raises(ValidationConfigurationError, match="repository is required"):
-        asyncio.run(lifespan(app).__aenter__())
+def test_app_startup_configures_postgres_repository():
+    async def start():
+        async with lifespan(app):
+            assert isinstance(
+                app.state.validation_report_repository, PostgresValidationReportRepository
+            )
+
+    asyncio.run(start())
 
 
 def test_service_does_not_return_report_when_save_fails():

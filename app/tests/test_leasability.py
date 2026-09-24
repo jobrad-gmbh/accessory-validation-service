@@ -157,7 +157,18 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
     assert execution.result.status is (
         ValidationStatus.PASSED if passed else ValidationStatus.REJECTED
     )
-    assert execution.result.details == "Deterministic criterion answer."
+    if passed:
+        assert execution.result.details == "Deterministic criterion answer."
+    else:
+        assert execution.result.details == (
+            "The accessory did not match an explicitly leasable type and was not "
+            "identified as a technical component, "
+            + ("" if is_bawu else "StVZO-related equipment, ")
+            + "a functional unit with the bicycle, or a bike-mounted item."
+        )
+        assert execution.result.criterion_results[-1].details == (
+            "Deterministic criterion answer."
+        )
 
 
 def test_decisive_criterion_provides_validation_details(monkeypatch):
@@ -263,10 +274,32 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
     instructions = client.generate.await_args.kwargs["instructions"]
     assert "# Explicitly not-leasable accessory types" in instructions
     assert "Bicycle trailers" in instructions
-    assert "The object must match this JSON Schema" in instructions
+    assert "Return exactly one JSON object" in instructions
+    assert "No json fences" in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "details"}
     assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
+
+
+def test_explicitly_leasable_type_accepts_a_single_json_code_fence():
+    client = AsyncMock()
+    client.config = LiteLLMConfig(
+        base_url="https://gateway.example/v1",
+        models=("client-default",),
+    )
+    client.generate.return_value.text = (
+        '```json\n{"answer": "NO", "details": "No listed type matches."}\n```'
+    )
+
+    result = asyncio.run(
+        criteria.ExplicitlyLeasableAccessoryTypeCriterion(client).evaluate(
+            request(), PRODUCT_INFORMATION
+        )
+    )
+
+    assert result == CriterionResult(
+        NO, "No listed type matches.", "explicitly_leasable_type"
+    )
 
 
 def test_prompt_output_schema_is_selected_per_criterion():
@@ -388,6 +421,7 @@ def test_special_rules_use_leasability_result(answer, leasable):
 
     assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.", "special_rules")
     instructions = client.generate.await_args.kwargs["instructions"]
+    assert "The listed negative cases are rule matches too." in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "leasable", "details"}
 

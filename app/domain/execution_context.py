@@ -1,6 +1,6 @@
 """Ambient identity of the validation execution currently running.
 
-Adapters (for example the LLM call recorder) read it to associate their own
+Adapters (for example the LLM request recorder) read it to associate their own
 records with the validation execution without every caller passing it along.
 """
 

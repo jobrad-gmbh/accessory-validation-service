@@ -57,6 +57,7 @@ Important:
 
 # Rules
 
+- The listed negative cases are rule matches too.
 - Answer `YES` only when at least one of the previously listed special rules clearly applies to the product.
 - Answer `NO` when none of the previously listed special rules clearly applies to the product.
 - Answer `UNKNOWN` only when the submitted information is insufficient to decide
