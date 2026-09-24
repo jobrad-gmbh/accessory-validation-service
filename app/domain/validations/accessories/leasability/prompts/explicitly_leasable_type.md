@@ -57,10 +57,8 @@ bicycle accessory types.
 
 # Answer mapping
 
-- Answer `YES` only when the product clearly matches one of the listed types.
-  In `details`, name that listed type and briefly state the strongest evidence.
-- Answer `NO` when the product type is sufficiently clear and it does not match
-  any listed type. Keep `details` short and explain the strongest reason.
+- Answer `YES` only when the product clearly matches one of the previously listed types.
+- Answer `NO` when the product type doesn not clearly match any of the previously listed type. 
 - Answer `UNKNOWN` only when the submitted information is insufficient to decide
-  whether the product matches a listed type. Keep `details` short and state what
-  is ambiguous or missing.
+  whether the product matches a listed type.
+- Keep `details` short and explain the strongest reason for your answer.
