@@ -3,8 +3,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.adapters.web.schemas import AccessoryInput
+from app.adapters.web.schemas import AccessoryInput, ValidationReportResponse
 from app.main import app, lifespan
+from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
@@ -22,6 +23,7 @@ from app.domain.validation import (
 from app.domain.validation_results import (
     ReportStatus,
     ValidationExecution,
+    ValidationReport,
     ValidationResult,
     ValidationStatus,
 )
@@ -129,9 +131,11 @@ def test_service_rejects_a_validation_execution_for_another_product():
         asyncio.run(service.validate(ValidationRequest(product=requested_product)))
 
 
-
 def test_service_saves_complete_report_before_returning():
     repository = AsyncMock()
+    criterion = SpecialRuleResult(
+        CriterionAnswer.YES, CriterionAnswer.NO, "Override.", "special_rules"
+    )
 
     class Check(Validation):
         id = "check"
@@ -140,6 +144,7 @@ def test_service_saves_complete_report_before_returning():
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 details="Not leasable.",
+                criterion_results=(criterion,),
             )
 
     class OtherCheck(Validation):
@@ -161,7 +166,7 @@ def test_service_saves_complete_report_before_returning():
     assert [execution.validation_id for execution in report.validations] == [
         "check", "other_check"
     ]
-    assert report.validations[0].result.details == "Not leasable."
+    assert report.validations[0].result.criterion_results == (criterion,)
 
 
 def test_service_does_not_save_incomplete_report():
@@ -209,6 +214,48 @@ def test_service_does_not_return_report_when_save_fails():
             )
         )
     repository.save.assert_awaited_once()
+
+
+def test_validation_result_criterion_results_default_to_empty():
+    assert validation_result().criterion_results == ()
+
+
+def test_report_response_exposes_criterion_results():
+    associated_product = product()
+    result = ValidationResult(
+        status=ValidationStatus.PASSED,
+        details="Rack is leasable.",
+        criterion_results=[
+            CriterionResult(CriterionAnswer.YES, "Fixed.", criterion_id="rack"),
+            SpecialRuleResult(
+                CriterionAnswer.YES,
+                CriterionAnswer.NO,
+                "Override.",
+                criterion_id="special_rules",
+            ),
+        ],
+    )
+    report = ValidationReport(
+        product=associated_product,
+        status=ReportStatus.VALID,
+        validations=(
+            ValidationExecution(
+                product=associated_product, validation_id="leasability", result=result
+            ),
+        ),
+    )
+
+    response = ValidationReportResponse.from_domain(report).model_dump(mode="json")
+
+    assert response["validations"][0]["criterion_results"] == [
+        {"criterion_id": "rack", "answer": "YES", "details": "Fixed."},
+        {
+            "criterion_id": "special_rules",
+            "answer": "YES",
+            "details": "Override.",
+            "leasable": "NO",
+        },
+    ]
 
 
 def test_api_preserves_product_context_and_defaults_to_non_bawu():

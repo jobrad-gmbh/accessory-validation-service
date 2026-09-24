@@ -66,8 +66,9 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         calls.append(self.id)
         configured = answers.get(self.id, default)
         if isinstance(configured, (CriterionResult, SpecialRuleResult)):
+            assert configured.criterion_id == self.id
             return configured
-        return CriterionResult(configured, "Deterministic criterion answer.")
+        return CriterionResult(configured, "Deterministic criterion answer.", self.id)
 
     for criterion in (
         strategies.ExplicitlyNotLeasableAccessoryTypeCriterion,
@@ -103,10 +104,10 @@ def test_validation_retrieves_product_information_once(monkeypatch):
 @pytest.mark.parametrize(
     "special",
     [
-        SpecialRuleResult(YES, YES, "A leasable special rule matched."),
-        SpecialRuleResult(YES, NO, "A non-leasable special rule matched."),
-        SpecialRuleResult(NO, UNKNOWN, "No special rule matched."),
-        SpecialRuleResult(UNKNOWN, UNKNOWN, "The match could not be determined."),
+        SpecialRuleResult(YES, YES, "A leasable special rule matched.", "special_rules"),
+        SpecialRuleResult(YES, NO, "A non-leasable special rule matched.", "special_rules"),
+        SpecialRuleResult(NO, UNKNOWN, "No special rule matched.", "special_rules"),
+        SpecialRuleResult(UNKNOWN, UNKNOWN, "The match could not be determined.", "special_rules"),
     ],
 )
 def test_special_rules_preserve_type_specific_outcomes(
@@ -161,7 +162,7 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
 
 def test_decisive_criterion_provides_validation_details(monkeypatch):
     calls = []
-    decisive = CriterionResult(YES, "The rack is a technical bicycle component.")
+    decisive = CriterionResult(YES, "The rack is a technical bicycle component.", "technical_bicycle_component")
     criteria_with_answers(
         monkeypatch,
         {"technical_bicycle_component": decisive},
@@ -172,6 +173,48 @@ def test_decisive_criterion_provides_validation_details(monkeypatch):
 
     assert execution.result.status is ValidationStatus.PASSED
     assert execution.result.details == decisive.details
+
+
+def test_criterion_results_list_every_evaluated_criterion_in_order(monkeypatch):
+    calls = []
+    special = SpecialRuleResult(NO, UNKNOWN, "No special rule matched.", "special_rules")
+    criteria_with_answers(
+        monkeypatch, {ORDER[1]: YES, "special_rules": special}, calls
+    )
+
+    execution = asyncio.run(validation().validate(request()))
+
+    assert execution.result.criterion_results == (
+        CriterionResult(NO, "Deterministic criterion answer.", criterion_id=ORDER[0]),
+        CriterionResult(YES, "Deterministic criterion answer.", criterion_id=ORDER[1]),
+        SpecialRuleResult(NO, UNKNOWN, special.details, criterion_id="special_rules"),
+    )
+
+
+@pytest.mark.parametrize("is_bawu", [False, True])
+def test_criterion_results_match_short_circuited_criteria(monkeypatch, is_bawu):
+    calls = []
+    criteria_with_answers(monkeypatch, {"functional_unit_with_bicycle": YES}, calls)
+
+    execution = asyncio.run(validation().validate(request(is_bawu)))
+
+    assert [result.criterion_id for result in execution.result.criterion_results] == calls
+    assert execution.result.criterion_results[-1].answer is YES
+
+
+def test_special_rule_result_keeps_leasable_answer(monkeypatch):
+    calls = []
+    criteria_with_answers(
+        monkeypatch,
+        {ORDER[0]: YES, "special_rules": SpecialRuleResult(YES, NO, "Override.", "special_rules")},
+        calls,
+    )
+
+    execution = asyncio.run(validation().validate(request()))
+
+    assert execution.result.criterion_results[-1] == SpecialRuleResult(
+        YES, NO, "Override.", criterion_id="special_rules"
+    )
 
 
 def test_criterion_failures_are_technical_errors(monkeypatch):
@@ -209,7 +252,7 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
         )
     )
 
-    assert result == CriterionResult(answer, "Classification reason.")
+    assert result == CriterionResult(answer, "Classification reason.", "explicitly_not_leasable_type")
     product_payload = json.loads(client.generate.await_args.args[0])
     assert product_payload["brand"] == "Example"
     assert product_payload["model"] == "Rack"
@@ -281,7 +324,7 @@ def test_explicitly_leasable_type_uses_llm_result(answer):
         )
     )
 
-    assert result == CriterionResult(answer, "Classification reason.")
+    assert result == CriterionResult(answer, "Classification reason.", "explicitly_leasable_type")
     instructions = client.generate.await_args.kwargs["instructions"]
     assert "# Explicitly leasable accessory types" in instructions
     assert "Bike lock" in instructions
@@ -311,7 +354,7 @@ def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
         criterion_class(client).evaluate(request(), PRODUCT_INFORMATION)
     )
 
-    assert result == CriterionResult(YES, "Classification reason.")
+    assert result == CriterionResult(YES, "Classification reason.", criterion_class.id)
     assert prompt_heading in client.generate.await_args.kwargs["instructions"]
     assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
 
@@ -343,7 +386,7 @@ def test_special_rules_use_leasability_result(answer, leasable):
         criteria.SpecialRulesCriterion(client).evaluate(request(), PRODUCT_INFORMATION)
     )
 
-    assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.")
+    assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.", "special_rules")
     instructions = client.generate.await_args.kwargs["instructions"]
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "leasable", "details"}

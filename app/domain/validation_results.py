@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
+from app.domain.criterion import CriterionResult, SpecialRuleResult
 from app.domain.product import (
     Product,
 )
@@ -22,16 +23,27 @@ class ReportStatus(StrEnum):
 
 @dataclass(frozen=True, kw_only=True)
 class ValidationResult:
-    """The business answer produced by a validation."""
+    """The business answer produced by a validation.
+
+    Criterion results are optional and listed in evaluation order.
+    """
 
     status: ValidationStatus
     details: str
+    criterion_results: tuple[CriterionResult | SpecialRuleResult, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ValidationStatus):
             raise ValueError("Validation result requires a ValidationStatus")
         if not isinstance(self.details, str) or not self.details.strip():
             raise ValueError("Validation result details cannot be blank")
+        object.__setattr__(self, "criterion_results", tuple(self.criterion_results))
+        if any(
+            not isinstance(result, (CriterionResult, SpecialRuleResult))
+            or not result.criterion_id
+            for result in self.criterion_results
+        ):
+            raise ValueError("Validation criterion results require identified criterion results")
 
 
 @dataclass(frozen=True, kw_only=True)

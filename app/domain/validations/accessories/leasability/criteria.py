@@ -144,7 +144,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class ExplicitlyLeasableAccessoryTypeCriterion:
@@ -168,7 +168,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class TechnicalBicycleComponentCriterion:
@@ -192,7 +192,7 @@ class TechnicalBicycleComponentCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class StvzoEquipmentCriterion:
@@ -216,7 +216,7 @@ class StvzoEquipmentCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class FunctionalUnitWithBicycleCriterion:
@@ -240,7 +240,7 @@ class FunctionalUnitWithBicycleCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class PermanentlyMountedCriterion:
@@ -264,7 +264,7 @@ class PermanentlyMountedCriterion:
             _CriterionResponse,
             config,
         )
-        return CriterionResult(result.answer, result.details)
+        return CriterionResult(result.answer, result.details, self.id)
 
 
 class SpecialRulesCriterion:
@@ -288,4 +288,4 @@ class SpecialRulesCriterion:
             _SpecialRulesResponse,
             config,
         )
-        return SpecialRuleResult(result.answer, result.leasable, result.details)
+        return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)

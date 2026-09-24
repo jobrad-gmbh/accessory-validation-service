@@ -13,6 +13,7 @@ from app.domain.product import (
 from app.domain.validation import (
     ValidationRequest,
 )
+from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.validation_results import (
     ReportStatus,
     ValidationReport,
@@ -64,6 +65,35 @@ class AccessoryInput(BaseModel):
         )
 
 
+class CriterionResultResponse(BaseModel):
+    """One evaluated criterion that explains a validation result."""
+
+    criterion_id: str
+    answer: CriterionAnswer
+    details: str
+
+
+class SpecialRuleResultResponse(CriterionResultResponse):
+    leasable: CriterionAnswer
+
+
+def _criterion_response(
+    result: CriterionResult | SpecialRuleResult,
+) -> CriterionResultResponse:
+    if isinstance(result, SpecialRuleResult):
+        return SpecialRuleResultResponse(
+            criterion_id=result.criterion_id,
+            answer=result.answer,
+            details=result.details,
+            leasable=result.leasable,
+        )
+    return CriterionResultResponse(
+        criterion_id=result.criterion_id,
+        answer=result.answer,
+        details=result.details,
+    )
+
+
 class ValidationResponse(BaseModel):
     """Public result of one validation execution."""
 
@@ -71,6 +101,7 @@ class ValidationResponse(BaseModel):
     validation_id: str
     status: ValidationStatus
     details: str
+    criterion_results: list[SpecialRuleResultResponse | CriterionResultResponse]
     executed_at: datetime
 
 
@@ -92,6 +123,10 @@ class ValidationReportResponse(BaseModel):
                     validation_id=execution.validation_id,
                     status=execution.result.status,
                     details=execution.result.details,
+                    criterion_results=[
+                        _criterion_response(result)
+                        for result in execution.result.criterion_results
+                    ],
                     executed_at=execution.executed_at,
                 )
                 for execution in report.validations
