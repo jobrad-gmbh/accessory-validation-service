@@ -73,11 +73,9 @@ async def standard_leasability_strategy(
     permanently_mounted = await collector.run(
         PermanentlyMountedCriterion(litellm_client), request, product_information
     )
-    return _result(
-        permanently_mounted.answer is CriterionAnswer.YES,
-        permanently_mounted,
-        collector,
-    )
+    if permanently_mounted.answer is CriterionAnswer.YES:
+        return _result(True, permanently_mounted, collector)
+    return _no_qualifying_criterion_result(collector, is_bawu=False)
 
 
 async def bawu_leasability_strategy(
@@ -123,11 +121,9 @@ async def bawu_leasability_strategy(
     permanently_mounted = await collector.run(
         PermanentlyMountedCriterion(litellm_client), request, product_information
     )
-    return _result(
-        permanently_mounted.answer is CriterionAnswer.YES,
-        permanently_mounted,
-        collector,
-    )
+    if permanently_mounted.answer is CriterionAnswer.YES:
+        return _result(True, permanently_mounted, collector)
+    return _no_qualifying_criterion_result(collector, is_bawu=True)
 
 
 class _LeasabilityCriterion(Protocol[CriterionOutcome]):
@@ -167,6 +163,24 @@ def _result(
     return ValidationResult(
         status=ValidationStatus.PASSED if leasable else ValidationStatus.REJECTED,
         details=source.details,
+        criterion_results=collector.results,
+    )
+
+
+def _no_qualifying_criterion_result(
+    collector: _CriterionResultCollector, *, is_bawu: bool
+) -> ValidationResult:
+    qualifying_types = (
+        "a technical component, a functional unit with the bicycle, or a bike-mounted item"
+        if is_bawu
+        else "a technical component, StVZO-related equipment, a functional unit with the bicycle, or a bike-mounted item"
+    )
+    return ValidationResult(
+        status=ValidationStatus.REJECTED,
+        details=(
+            "The accessory did not match an explicitly leasable type and was not "
+            f"identified as {qualifying_types}."
+        ),
         criterion_results=collector.results,
     )
 
