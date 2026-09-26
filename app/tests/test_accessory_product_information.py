@@ -1,11 +1,10 @@
 import json
-from typing import Any, Mapping, Sequence
 
 import pytest
 from pydantic import HttpUrl
 
 from app.adapters.llm import (
-    LLMClientConfig,
+    LLMRequestSpec,
     LLMResponse,
     LLMSource,
     LiteLLMConfig,
@@ -30,26 +29,10 @@ class FakeLLMClient:
         )
         self.response = response
         self.error = error
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[LLMRequestSpec] = []
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: LLMClientConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse:
-        self.calls.append(
-            {
-                "prompt": prompt,
-                "instructions": instructions,
-                "config": config,
-                "tools": tools,
-                "tool_choice": tool_choice,
-            }
-        )
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse:
+        self.calls.append(request)
         if self.error is not None:
             raise self.error
         assert self.response is not None
@@ -85,14 +68,15 @@ async def test_retrieves_condensed_information_with_required_web_search():
     assert result.used_web_search is True
     assert result.sources == (source,)
     call = client.calls[0]
-    assert call["tools"] == (
+    assert call.tools == (
         {
             "type": "web_search",
             "parameters": {"engine": "auto", "max_results": 5},
         },
     )
-    assert call["tool_choice"] == "required"
-    assert json.loads(str(call["prompt"])) == {
+    assert call.tool_choice == "required"
+    assert call.description == "product_information"
+    assert json.loads(call.prompt) == {
         "brand": "Ortlieb",
         "model": "Quick Rack",
         "category": "rear rack",
@@ -100,7 +84,7 @@ async def test_retrieves_condensed_information_with_required_web_search():
         "size": None,
         "color": None,
     }
-    assert "Do not make a leasing decision" in str(call["instructions"])
+    assert "Do not make a leasing decision" in call.instructions
 
 
 @pytest.mark.asyncio
@@ -114,8 +98,8 @@ async def test_search_can_be_disabled_for_models_without_that_capability():
     )
 
     assert result.used_web_search is False
-    assert client.calls[0]["tools"] == ()
-    assert client.calls[0]["tool_choice"] is None
+    assert client.calls[0].tools == ()
+    assert client.calls[0].tool_choice is None
 
 
 @pytest.mark.asyncio

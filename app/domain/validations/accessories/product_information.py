@@ -5,6 +5,7 @@ from pathlib import Path
 from app.adapters.llm import (
     LLMClientConfig,
     LLMClient,
+    LLMRequestSpec,
     LLMSource,
     UnsupportedLLMToolError,
 )
@@ -46,11 +47,14 @@ class AccessoryProductInformationService:
         tool_choice = "required" if use_web_search else None
         try:
             response = await self._llm_client.generate(
-                _product_prompt(product),
-                instructions=PROMPT_PATH.read_text(encoding="utf-8").strip(),
-                config=config,
-                tools=tools,
-                tool_choice=tool_choice,
+                LLMRequestSpec(
+                    prompt=_product_prompt(product),
+                    instructions=PROMPT_PATH.read_text(encoding="utf-8").strip(),
+                    config=config,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    description="product_information",
+                )
             )
         except UnsupportedLLMToolError as error:
             raise WebSearchNotSupportedError(error.model) from None

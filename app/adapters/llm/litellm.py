@@ -5,7 +5,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import SettingsConfigDict
 
-from app.adapters.llm.client import LLMResponse, LLMSource
+from app.adapters.llm.client import LLMRequestSpec, LLMResponse, LLMSource, LLMUsage
 from app.adapters.llm.config import LLMClientConfig
 from app.adapters.llm.errors import (
     LLMError,
@@ -37,6 +37,14 @@ class _OutputItem(BaseModel):
     content: list[_ContentPart] | None = None
 
 
+class _Usage(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+
+
 class _Response(BaseModel):
     model_config = ConfigDict(strict=True)
 
@@ -45,6 +53,7 @@ class _Response(BaseModel):
     output: list[_OutputItem]
     model: str | None = None
     error: dict[str, Any] | None = None
+    usage: _Usage | None = None
 
 
 def _decode(data: str | bytes) -> _Response:
@@ -214,27 +223,19 @@ class LiteLLMClient:
                 status_code=response.status_code,
             )
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: LLMClientConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse:
-        selected = config if config is not None else self.config
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse:
+        selected = request.config if request.config is not None else self.config
         for model in selected.models:
             try:
                 async with asyncio.timeout(selected.timeout_seconds):
                     response = await self._http.post(
                         **self._request(
-                            prompt,
-                            instructions,
+                            request.prompt,
+                            request.instructions,
                             selected,
                             model,
-                            tools,
-                            tool_choice,
+                            request.tools,
+                            request.tool_choice,
                         )
                     )
             except (TimeoutError, httpx.TimeoutException):
@@ -243,7 +244,7 @@ class LiteLLMClient:
                 raise LLMError("Could not reach the LLM service") from None
             if self._model_not_found(response):
                 continue
-            self._check_status(response, model, tools)
+            self._check_status(response, model, request.tools)
             result = _decode(response.content)
             content = _text(result)
             return LLMResponse(
@@ -252,5 +253,14 @@ class LiteLLMClient:
                 result.status,
                 _tool_calls(result),
                 _sources(result),
+                usage=(
+                    LLMUsage(
+                        input_tokens=result.usage.input_tokens,
+                        output_tokens=result.usage.output_tokens,
+                        total_tokens=result.usage.total_tokens,
+                    )
+                    if result.usage is not None
+                    else None
+                ),
             )
         raise ModelsNotFoundError(selected.models)

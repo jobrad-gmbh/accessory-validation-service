@@ -5,7 +5,7 @@ from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from app.adapters.llm import LLMClient, LLMModelSettings
+from app.adapters.llm import LLMClient, LLMModelSettings, LLMRequestSpec
 from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.validation import (
     ValidationRequest,
@@ -124,14 +124,18 @@ async def _generate_structured_response(
     prompt_path: Path,
     response_model: type[ResponseModel],
     settings: LLMModelSettings | None,
+    description: str | None = None,
 ) -> ResponseModel:
     config = llm_client.config.with_overrides(models=DEFAULT_MODELS)
     if settings is not None:
         config = config.with_settings(settings)
     response = await llm_client.generate(
-        _product_prompt(request, product_information),
-        instructions=load_prompt(prompt_path, response_model),
-        config=config,
+        LLMRequestSpec(
+            prompt=_product_prompt(request, product_information),
+            instructions=load_prompt(prompt_path, response_model),
+            description=description,
+            config=config,
+        )
     )
     text = response.text.strip()
     fence = _JSON_CODE_FENCE.fullmatch(text)
@@ -163,6 +167,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
             EXPLICITLY_NOT_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -187,6 +192,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
             EXPLICITLY_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -211,6 +217,7 @@ class TechnicalBicycleComponentCriterion:
             TECHNICAL_BICYCLE_COMPONENT_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -235,6 +242,7 @@ class StvzoEquipmentCriterion:
             STVZO_EQUIPMENT_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -259,6 +267,7 @@ class FunctionalUnitWithBicycleCriterion:
             FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -283,6 +292,7 @@ class PermanentlyMountedCriterion:
             PERMANENTLY_MOUNTED_PROMPT_PATH,
             _CriterionResponse,
             settings,
+            self.id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -307,5 +317,6 @@ class SpecialRulesCriterion:
             SPECIAL_RULES_PROMPT_PATH,
             _SpecialRulesResponse,
             settings,
+            self.id,
         )
         return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)

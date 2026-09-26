@@ -3,10 +3,10 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol
 from uuid import UUID, uuid4
 
-from app.adapters.llm.client import LLMClient, LLMResponse
+from app.adapters.llm.client import LLMClient, LLMRequestSpec, LLMResponse
 from app.adapters.llm.config import LLMClientConfig
 from app.domain.execution_context import current_validation_execution_id
 
@@ -25,6 +25,7 @@ class LLMRequest:
     tools: tuple[Mapping[str, Any], ...]
     started_at: datetime
     duration_ms: int
+    description: str | None = None
     response: LLMResponse | None = None
     error: str | None = None
     id: UUID = field(default_factory=uuid4)
@@ -35,10 +36,7 @@ class LLMRequestRepository(Protocol):
 
 
 class RecordingLLMClient:
-    """Record every generation of the wrapped client, successful or failed.
-
-    A failing sink is logged and never changes the outcome of the generation.
-    """
+    """Record every generation of the wrapped client, successful or failed."""
 
     def __init__(
         self, inner_llm_client: LLMClient, repository: LLMRequestRepository
@@ -50,27 +48,13 @@ class RecordingLLMClient:
     def config(self) -> LLMClientConfig:
         return self.inner_llm_client.config
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: LLMClientConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse:
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse:
         started_at = datetime.now(UTC)
         started = perf_counter()
         response: LLMResponse | None = None
         error: str | None = None
         try:
-            response = await self.inner_llm_client.generate(
-                prompt,
-                instructions=instructions,
-                config=config,
-                tools=tools,
-                tool_choice=tool_choice,
-            )
+            response = await self.inner_llm_client.generate(request)
             return response
         except BaseException as exc:
             error = repr(exc)
@@ -79,13 +63,16 @@ class RecordingLLMClient:
             await self._record(
                 LLMRequest(
                     validation_execution_id=current_validation_execution_id(),
-                    prompt=prompt,
-                    instructions=instructions,
+                    prompt=request.prompt,
+                    instructions=request.instructions,
+                    description=request.description,
                     instructions_hash=hashlib.sha256(
-                        instructions.encode("utf-8")
+                        request.instructions.encode("utf-8")
                     ).hexdigest(),
-                    requested_models=(config or self.inner_llm_client.config).models,
-                    tools=tuple(tools),
+                    requested_models=(
+                        request.config or self.inner_llm_client.config
+                    ).models,
+                    tools=tuple(request.tools),
                     started_at=started_at,
                     duration_ms=round((perf_counter() - started) * 1000),
                     response=response,

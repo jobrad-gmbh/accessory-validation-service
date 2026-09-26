@@ -11,24 +11,35 @@ class LLMSource:
 
 
 @dataclass(frozen=True)
+class LLMUsage:
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+
+
+@dataclass(frozen=True)
 class LLMResponse:
     text: str
     model: str
     status: str
     tool_calls: tuple[str, ...] = ()
     sources: tuple[LLMSource, ...] = ()
+    usage: LLMUsage | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class LLMRequestSpec:
+    prompt: str
+    instructions: str = ""
+    config: LLMClientConfig | None = None
+    tools: Sequence[Mapping[str, Any]] = ()
+    tool_choice: str | Mapping[str, Any] | None = None
+    # Metadata for observability only; never sent to the model.
+    description: str | None = None
 
 
 class LLMClient(Protocol):
     @property
     def config(self) -> LLMClientConfig: ...
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: LLMClientConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse: ...
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse: ...

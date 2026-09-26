@@ -264,21 +264,22 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
     )
 
     assert result == CriterionResult(answer, "Classification reason.", "explicitly_not_leasable_type")
-    product_payload = json.loads(client.generate.await_args.args[0])
+    product_payload = json.loads(client.generate.await_args.args[0].prompt)
     assert product_payload["brand"] == "Example"
     assert product_payload["model"] == "Rack"
     assert product_payload["product_information"] == {
         "summary": PRODUCT_INFORMATION.summary,
         "sources": [],
     }
-    instructions = client.generate.await_args.kwargs["instructions"]
+    instructions = client.generate.await_args.args[0].instructions
     assert "# Explicitly not-leasable accessory types" in instructions
     assert "Bicycle trailers" in instructions
     assert "Return exactly one JSON object" in instructions
     assert "No json fences" in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "details"}
-    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
+    assert client.generate.await_args.args[0].description == "explicitly_not_leasable_type"
+    assert client.generate.await_args.args[0].config.models == criteria.DEFAULT_MODELS
 
 
 def test_explicitly_leasable_type_accepts_a_single_json_code_fence():
@@ -358,10 +359,10 @@ def test_explicitly_leasable_type_uses_llm_result(answer):
     )
 
     assert result == CriterionResult(answer, "Classification reason.", "explicitly_leasable_type")
-    instructions = client.generate.await_args.kwargs["instructions"]
+    instructions = client.generate.await_args.args[0].instructions
     assert "# Explicitly leasable accessory types" in instructions
     assert "Bike lock" in instructions
-    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
+    assert client.generate.await_args.args[0].config.models == criteria.DEFAULT_MODELS
 
 
 @pytest.mark.parametrize(
@@ -388,8 +389,8 @@ def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
     )
 
     assert result == CriterionResult(YES, "Classification reason.", criterion_class.id)
-    assert prompt_heading in client.generate.await_args.kwargs["instructions"]
-    assert client.generate.await_args.kwargs["config"].models == criteria.DEFAULT_MODELS
+    assert prompt_heading in client.generate.await_args.args[0].instructions
+    assert client.generate.await_args.args[0].config.models == criteria.DEFAULT_MODELS
 
 
 @pytest.mark.parametrize(
@@ -420,7 +421,7 @@ def test_special_rules_use_leasability_result(answer, leasable):
     )
 
     assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.", "special_rules")
-    instructions = client.generate.await_args.kwargs["instructions"]
+    instructions = client.generate.await_args.args[0].instructions
     assert "The listed negative cases are rule matches too." in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
     assert set(schema["properties"]) == {"answer", "leasable", "details"}
@@ -477,13 +478,13 @@ def test_criterion_overrides_apply_only_to_one_call():
     asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION, settings=settings))
     asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION))
 
-    overridden = client.generate.await_args_list[0].kwargs["config"]
+    overridden = client.generate.await_args_list[0].args[0].config
     assert overridden.models == ("other-primary", "other-backup")
     assert overridden.temperature == 0.1
     assert overridden.max_tokens == 200
     assert overridden.timeout_seconds == 15
     assert overridden.base_url == client.config.base_url
-    default_config = client.generate.await_args_list[1].kwargs["config"]
+    default_config = client.generate.await_args_list[1].args[0].config
     assert default_config.models == criteria.DEFAULT_MODELS
     assert default_config.temperature == 0.5
     assert client.config.models == ("client-default",)

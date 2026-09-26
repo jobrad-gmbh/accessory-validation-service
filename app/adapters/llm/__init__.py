@@ -1,4 +1,10 @@
-from app.adapters.llm.client import LLMClient, LLMResponse, LLMSource
+from app.adapters.llm.client import (
+    LLMClient,
+    LLMRequestSpec,
+    LLMResponse,
+    LLMSource,
+    LLMUsage,
+)
 from app.adapters.llm.config import (
     LLMClientConfig,
     LLMConnectionSettings,
@@ -40,8 +46,10 @@ __all__ = [
     "LLMClient",
     "LLMClientConfig",
     "LLMError",
+    "LLMRequestSpec",
     "LLMResponse",
     "LLMSource",
+    "LLMUsage",
     "LLMResponseError",
     "LLMTimeoutError",
     "LiteLLMClient",

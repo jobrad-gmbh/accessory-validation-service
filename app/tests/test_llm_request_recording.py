@@ -5,6 +5,7 @@ import pytest
 
 from app.adapters.llm import (
     LiteLLMConfig,
+    LLMRequestSpec,
     LLMResponse,
     RecordingLLMClient,
 )
@@ -43,8 +44,12 @@ class MakesTwoLLMRequests(Validation):
         self._llm_client = llm_client
 
     async def evaluate_result(self, request):
-        await self._llm_client.generate("first", instructions="Be brief")
-        await self._llm_client.generate("second")
+        await self._llm_client.generate(
+            LLMRequestSpec(
+                prompt="first", instructions="Be brief", description="first_check"
+            )
+        )
+        await self._llm_client.generate(LLMRequestSpec(prompt="second"))
         return ValidationResult(status=ValidationStatus.PASSED, details="Passed.")
 
 
@@ -65,6 +70,11 @@ def test_requests_are_associated_with_the_validation_execution():
     assert all(request.validation_execution_id == execution.id for request in requests)
     assert requests[0].response is RESPONSE
     assert requests[0].instructions == "Be brief"
+    assert [request.description for request in requests] == ["first_check", None]
+    forwarded = client.inner_llm_client.generate.await_args_list[0].args[0]
+    assert forwarded == LLMRequestSpec(
+        prompt="first", instructions="Be brief", description="first_check"
+    )
     assert requests[0].requested_models == ("default-model",)
     assert requests[0].instructions_hash != requests[1].instructions_hash
     assert current_validation_execution_id() is None
@@ -73,7 +83,7 @@ def test_requests_are_associated_with_the_validation_execution():
 def test_requests_outside_a_validation_have_no_execution_id():
     client, requests = recorded_client(return_value=RESPONSE)
 
-    assert asyncio.run(client.generate("hello")) is RESPONSE
+    assert asyncio.run(client.generate(LLMRequestSpec(prompt="hello"))) is RESPONSE
     assert requests[0].validation_execution_id is None
 
 
@@ -82,9 +92,12 @@ def test_failed_requests_are_recorded_and_reraised():
     client, requests = recorded_client(side_effect=failure)
 
     with pytest.raises(RuntimeError, match="Provider unavailable"):
-        asyncio.run(client.generate("hello"))
+        asyncio.run(
+            client.generate(LLMRequestSpec(prompt="hello", description="failed_check"))
+        )
 
     assert requests[0].response is None
+    assert requests[0].description == "failed_check"
     assert "Provider unavailable" in requests[0].error
 
 
@@ -93,7 +106,7 @@ def test_storage_failure_does_not_change_generation_result():
     repository.save.side_effect = RuntimeError("Database unavailable")
     client = RecordingLLMClient(inner_client(return_value=RESPONSE), repository)
 
-    assert asyncio.run(client.generate("hello")) is RESPONSE
+    assert asyncio.run(client.generate(LLMRequestSpec(prompt="hello"))) is RESPONSE
     repository.save.assert_awaited_once()
 
 
