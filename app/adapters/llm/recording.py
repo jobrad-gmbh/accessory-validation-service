@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, Sequence
 from uuid import UUID, uuid4
 
 from app.adapters.llm.client import LLMClient, LLMResponse
-from app.adapters.llm.config import ChatConfig
+from app.adapters.llm.config import LLMClientConfig
 from app.domain.execution_context import current_validation_execution_id
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class RecordingLLMClient:
         self._repository = repository
 
     @property
-    def config(self) -> ChatConfig:
+    def config(self) -> LLMClientConfig:
         return self.inner_llm_client.config
 
     async def generate(
@@ -55,7 +55,7 @@ class RecordingLLMClient:
         prompt: str,
         *,
         instructions: str = "",
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
         tools: Sequence[Mapping[str, Any]] = (),
         tool_choice: str | Mapping[str, Any] | None = None,
     ) -> LLMResponse:

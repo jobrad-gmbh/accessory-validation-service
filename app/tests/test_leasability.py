@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from app.adapters.llm import LiteLLMConfig
+from app.adapters.llm import LiteLLMConfig, LLMModelSettings
 from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.errors import ValidationExecutionError
 from app.domain.product import Product, ProductContext, ProductOrigin, ProductType
@@ -61,7 +61,7 @@ def validation():
 
 
 def criteria_with_answers(monkeypatch, answers, calls, default=NO):
-    async def evaluate(self, submitted, product_information):
+    async def evaluate(self, submitted, product_information, *, settings=None):
         assert product_information is PRODUCT_INFORMATION
         calls.append(self.id)
         configured = answers.get(self.id, default)
@@ -467,17 +467,22 @@ def test_criterion_overrides_apply_only_to_one_call():
     )
     client.generate.return_value.text = '{"answer": "NO", "details": "A rack."}'
     criterion = criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client)
-    override = client.config.with_overrides(
+    settings = LLMModelSettings(
         models=("other-primary", "other-backup"),
         temperature=0.1,
         max_tokens=200,
         timeout_seconds=15,
     )
 
-    asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION, config=override))
+    asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION, settings=settings))
     asyncio.run(criterion.evaluate(request(), PRODUCT_INFORMATION))
 
-    assert client.generate.await_args_list[0].kwargs["config"] is override
+    overridden = client.generate.await_args_list[0].kwargs["config"]
+    assert overridden.models == ("other-primary", "other-backup")
+    assert overridden.temperature == 0.1
+    assert overridden.max_tokens == 200
+    assert overridden.timeout_seconds == 15
+    assert overridden.base_url == client.config.base_url
     default_config = client.generate.await_args_list[1].kwargs["config"]
     assert default_config.models == criteria.DEFAULT_MODELS
     assert default_config.temperature == 0.5

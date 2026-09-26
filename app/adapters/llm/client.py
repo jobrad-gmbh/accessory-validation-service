@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
 
-from app.adapters.llm.config import ChatConfig
+from app.adapters.llm.config import LLMClientConfig
 
 
 @dataclass(frozen=True)
@@ -21,14 +21,14 @@ class LLMResponse:
 
 class LLMClient(Protocol):
     @property
-    def config(self) -> ChatConfig: ...
+    def config(self) -> LLMClientConfig: ...
 
     async def generate(
         self,
         prompt: str,
         *,
         instructions: str = "",
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
         tools: Sequence[Mapping[str, Any]] = (),
         tool_choice: str | Mapping[str, Any] | None = None,
     ) -> LLMResponse: ...

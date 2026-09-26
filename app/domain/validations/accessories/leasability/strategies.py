@@ -1,8 +1,9 @@
 """Standard and BAWU leasability flows expressed as ordinary Python."""
 
+from collections.abc import Mapping
 from typing import Protocol, TypeVar
 
-from app.adapters.llm import LLMClient
+from app.adapters.llm import LLMClient, LLMModelSettings
 from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationResult, ValidationStatus
@@ -28,8 +29,9 @@ async def standard_leasability_strategy(
     request: ValidationRequest,
     litellm_client: LLMClient,
     product_information: AccessoryProductInformation,
+    criterion_settings: Mapping[str, LLMModelSettings] | None = None,
 ) -> ValidationResult:
-    collector = _CriterionResultCollector()
+    collector = _CriterionResultCollector(criterion_settings)
     not_leasable = await collector.run(
         ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
         request,
@@ -82,8 +84,9 @@ async def bawu_leasability_strategy(
     request: ValidationRequest,
     litellm_client: LLMClient,
     product_information: AccessoryProductInformation,
+    criterion_settings: Mapping[str, LLMModelSettings] | None = None,
 ) -> ValidationResult:
-    collector = _CriterionResultCollector()
+    collector = _CriterionResultCollector(criterion_settings)
     not_leasable = await collector.run(
         ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
         request,
@@ -127,17 +130,22 @@ async def bawu_leasability_strategy(
 
 
 class _LeasabilityCriterion(Protocol[CriterionOutcome]):
+    id: str
+
     async def evaluate(
         self,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
+        *,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionOutcome: ...
 
 
 class _CriterionResultCollector:
-    """Evaluate criteria and keep their results in evaluation order."""
+    """Evaluate criteria with their settings and keep results in evaluation order."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings: Mapping[str, LLMModelSettings] | None = None) -> None:
+        self._settings = settings or {}
         self._results: list[CriterionResult | SpecialRuleResult] = []
 
     async def run(
@@ -146,7 +154,9 @@ class _CriterionResultCollector:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
     ) -> CriterionOutcome:
-        outcome = await criterion.evaluate(request, product_information)
+        outcome = await criterion.evaluate(
+            request, product_information, settings=self._settings.get(criterion.id)
+        )
         self._results.append(outcome)
         return outcome
 

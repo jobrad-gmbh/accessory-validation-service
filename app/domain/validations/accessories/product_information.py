@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.adapters.llm import (
-    ChatConfig,
+    LLMClientConfig,
     LLMClient,
     LLMSource,
     UnsupportedLLMToolError,
@@ -40,7 +40,7 @@ class AccessoryProductInformationService:
         product: ProductInput,
         *,
         use_web_search: bool = True,
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
     ) -> AccessoryProductInformation:
         tools = (WEB_SEARCH_TOOL,) if use_web_search else ()
         tool_choice = "required" if use_web_search else None

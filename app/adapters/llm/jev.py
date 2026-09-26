@@ -7,7 +7,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 from pydantic_settings import SettingsConfigDict
 
-from app.adapters.llm.config import LLMConfig
+from app.adapters.llm.config import LLMClientConfig
 from app.adapters.llm.errors import (
     LLMError,
     LLMResponseError,
@@ -19,7 +19,7 @@ State = str | dict[str, JsonValue] | list[JsonValue]
 Probability = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 
 
-class JevConfig(LLMConfig):
+class JevConfig(LLMClientConfig):
     model_config = SettingsConfigDict(env_prefix="TYPESAFE_")
 
 

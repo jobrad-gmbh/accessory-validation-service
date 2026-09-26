@@ -36,6 +36,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
         application.state.validation_report_repository = PostgresValidationReportRepository(engine)
         llm_request_repository = PostgresLLMRequestRepository(engine)
         async with httpx.AsyncClient() as http_client:
+            application.state.http_client = http_client
             application.state.litellm_client = RecordingLLMClient(
                 LiteLLMClient(http_client), llm_request_repository
             )

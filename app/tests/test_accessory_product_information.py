@@ -5,7 +5,7 @@ import pytest
 from pydantic import HttpUrl
 
 from app.adapters.llm import (
-    ChatConfig,
+    LLMClientConfig,
     LLMResponse,
     LLMSource,
     LiteLLMConfig,
@@ -37,7 +37,7 @@ class FakeLLMClient:
         prompt: str,
         *,
         instructions: str = "",
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
         tools: Sequence[Mapping[str, Any]] = (),
         tool_choice: str | Mapping[str, Any] | None = None,
     ) -> LLMResponse:

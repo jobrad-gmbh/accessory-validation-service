@@ -1,5 +1,9 @@
 from app.adapters.llm.client import LLMClient, LLMResponse, LLMSource
-from app.adapters.llm.config import ChatConfig, LLMConfig
+from app.adapters.llm.config import (
+    LLMClientConfig,
+    LLMConnectionSettings,
+    LLMModelSettings,
+)
 from app.adapters.llm.jev import (
     ChoiceQuestion,
     JevClient,
@@ -23,7 +27,8 @@ from app.adapters.llm.recording import (
 )
 
 __all__ = [
-    "ChatConfig",
+    "LLMConnectionSettings",
+    "LLMModelSettings",
     "JevConfig",
     "JevClient",
     "JevRequest",
@@ -33,7 +38,7 @@ __all__ = [
     "ScoreQuestion",
     "LLMRequest",
     "LLMClient",
-    "LLMConfig",
+    "LLMClientConfig",
     "LLMError",
     "LLMResponse",
     "LLMSource",

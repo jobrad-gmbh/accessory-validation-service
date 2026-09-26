@@ -2,8 +2,9 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from app.adapters.llm.config import LLMConnectionSettings, LLMModelSettings
 from app.domain.product import (
     Product,
     ProductContext,
@@ -19,6 +20,7 @@ from app.domain.validation_results import (
     ValidationReport,
     ValidationStatus,
 )
+from app.domain.validations.accessories.leasability import LeasabilityCriterionId
 
 
 class AccessoryOrigin(BaseModel):
@@ -63,6 +65,21 @@ class AccessoryInput(BaseModel):
             ),
             context=self.context,
         )
+
+
+class AccessoryTestLLMSettings(LLMConnectionSettings, LLMModelSettings):
+    """LLM settings for a test run. The server's API key is never used."""
+
+    api_key: SecretStr = Field(min_length=1)
+
+
+class AccessoryTestInput(AccessoryInput):
+    """Accessory payload plus the LLM settings used only for this test run."""
+
+    llm_settings: AccessoryTestLLMSettings
+    criterion_settings: dict[LeasabilityCriterionId, LLMModelSettings] = Field(
+        default_factory=dict
+    )
 
 
 class CriterionResultResponse(BaseModel):

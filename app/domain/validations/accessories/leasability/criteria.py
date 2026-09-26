@@ -1,11 +1,11 @@
 import json
 import re
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from app.adapters.llm import ChatConfig, LLMClient
+from app.adapters.llm import LLMClient, LLMModelSettings
 from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
 from app.domain.validation import (
     ValidationRequest,
@@ -15,6 +15,16 @@ from app.domain.validations.accessories.product_information import (
 )
 
 DEFAULT_MODELS = ("glm-5.3", "gpt-6-luna")
+
+LeasabilityCriterionId = Literal[
+    "explicitly_not_leasable_type",
+    "explicitly_leasable_type",
+    "technical_bicycle_component",
+    "stvzo_equipment",
+    "functional_unit_with_bicycle",
+    "permanently_mounted",
+    "special_rules",
+]
 
 EXPLICITLY_NOT_LEASABLE_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "explicitly_not_leasable_type.md"
@@ -113,13 +123,15 @@ async def _generate_structured_response(
     product_information: AccessoryProductInformation,
     prompt_path: Path,
     response_model: type[ResponseModel],
-    config: ChatConfig | None,
+    settings: LLMModelSettings | None,
 ) -> ResponseModel:
-    selected_config = config or llm_client.config.with_overrides(models=DEFAULT_MODELS)
+    config = llm_client.config.with_overrides(models=DEFAULT_MODELS)
+    if settings is not None:
+        config = config.with_settings(settings)
     response = await llm_client.generate(
         _product_prompt(request, product_information),
         instructions=load_prompt(prompt_path, response_model),
-        config=selected_config,
+        config=config,
     )
     text = response.text.strip()
     fence = _JSON_CODE_FENCE.fullmatch(text)
@@ -142,7 +154,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -150,7 +162,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
             product_information,
             EXPLICITLY_NOT_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -166,7 +178,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -174,7 +186,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
             product_information,
             EXPLICITLY_LEASABLE_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -190,7 +202,7 @@ class TechnicalBicycleComponentCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -198,7 +210,7 @@ class TechnicalBicycleComponentCriterion:
             product_information,
             TECHNICAL_BICYCLE_COMPONENT_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -214,7 +226,7 @@ class StvzoEquipmentCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -222,7 +234,7 @@ class StvzoEquipmentCriterion:
             product_information,
             STVZO_EQUIPMENT_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -238,7 +250,7 @@ class FunctionalUnitWithBicycleCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -246,7 +258,7 @@ class FunctionalUnitWithBicycleCriterion:
             product_information,
             FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -262,7 +274,7 @@ class PermanentlyMountedCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -270,7 +282,7 @@ class PermanentlyMountedCriterion:
             product_information,
             PERMANENTLY_MOUNTED_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -286,7 +298,7 @@ class SpecialRulesCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
     ) -> SpecialRuleResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -294,6 +306,6 @@ class SpecialRulesCriterion:
             product_information,
             SPECIAL_RULES_PROMPT_PATH,
             _SpecialRulesResponse,
-            config,
+            settings,
         )
         return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)

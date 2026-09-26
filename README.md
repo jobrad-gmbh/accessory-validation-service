@@ -49,6 +49,53 @@ curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate \
 
 `context` is optional and defaults to a non-BAWU order.
 
+## Test an accessory validation
+
+`POST /api/v1/accessories/validate/test` runs the same validation and returns the
+same report, but stores nothing: no product, validation execution, or LLM request.
+
+It needs `llm_settings.api_key`. The server's `LITELLM_API_KEY` is never used by
+this endpoint. The other LLM settings are optional. Any setting you leave out uses
+the server's value.
+
+`criterion_settings` is optional. It changes `models`, `temperature`, `max_tokens`,
+`reasoning_effort`, or `timeout_seconds` for individual criteria. All requests use
+the API key and base URL from `llm_settings`, so those two fields cannot be set per
+criterion. Criteria
+without their own settings use their default models and the general settings.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate/test \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "brand": "Example",
+    "model": "Rear rack",
+    "price": "49.99",
+    "origin": {"source": "odoo", "external_ref": "ACC-42"},
+    "llm_settings": {
+      "api_key": "sk-your-own-key",
+      "base_url": "https://litellm.example.com/v1",
+      "models": ["gpt-luna"],
+      "temperature": 0.2,
+      "max_tokens": 1000,
+      "reasoning_effort": "low",
+      "timeout_seconds": 60
+    },
+    "criterion_settings": {
+      "special_rules": {"models": ["glm-5.3"], "temperature": 0, "reasoning_effort": "medium"}
+    }
+  }'
+```
+
+Left unset, no reasoning effort is sent and the model uses its default. Allowed
+values are OpenAI's (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`);
+individual models support only a subset, and the request fails if a model rejects
+the chosen value.
+
+Criterion ids: `explicitly_not_leasable_type`, `explicitly_leasable_type`,
+`technical_bicycle_component`, `stvzo_equipment`, `functional_unit_with_bicycle`,
+`permanently_mounted`, `special_rules`.
+
 ## Development
 
 ```bash

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import SettingsConfigDict
 
 from app.adapters.llm.client import LLMResponse, LLMSource
-from app.adapters.llm.config import ChatConfig
+from app.adapters.llm.config import LLMClientConfig
 from app.adapters.llm.errors import (
     LLMError,
     LLMResponseError,
@@ -16,7 +16,7 @@ from app.adapters.llm.errors import (
 )
 
 
-class LiteLLMConfig(ChatConfig):
+class LiteLLMConfig(LLMClientConfig):
     model_config = SettingsConfigDict(env_prefix="LITELLM_")
 
 
@@ -112,13 +112,13 @@ class LiteLLMClient:
     def __init__(
         self,
         http_client: httpx.AsyncClient,
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
     ) -> None:
         self._http = http_client
         self._config = config if config is not None else LiteLLMConfig.from_env()
 
     @property
-    def config(self) -> ChatConfig:
+    def config(self) -> LLMClientConfig:
         return self._config
 
     def _model_not_found(self, response: httpx.Response) -> bool:
@@ -139,7 +139,7 @@ class LiteLLMClient:
     def _request(
         prompt: str,
         instructions: str,
-        config: ChatConfig,
+        config: LLMClientConfig,
         model: str,
         tools: Sequence[Mapping[str, Any]],
         tool_choice: str | Mapping[str, Any] | None,
@@ -161,6 +161,8 @@ class LiteLLMClient:
             payload["temperature"] = config.temperature
         if config.max_tokens is not None:
             payload["max_output_tokens"] = config.max_tokens
+        if config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": config.reasoning_effort}
         headers = {"Accept": "application/json"}
         if config.api_key is not None:
             headers["Authorization"] = f"Bearer {config.api_key.get_secret_value()}"
@@ -217,7 +219,7 @@ class LiteLLMClient:
         prompt: str,
         *,
         instructions: str = "",
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
         tools: Sequence[Mapping[str, Any]] = (),
         tool_choice: str | Mapping[str, Any] | None = None,
     ) -> LLMResponse:
