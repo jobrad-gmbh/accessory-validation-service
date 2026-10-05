@@ -7,11 +7,15 @@ JSON field names, and required enum values exactly as specified.
 
 # Task
 
-Decide whether the submitted product clearly matches any accessory type in the
-list below. Your `answer` describes a match with this list. It does not state
+Decide whether the submitted product clearly matches any accessory type excluded
+under Land BW 2.0 in the list below. Your `answer` describes a match with this list. It does not state
 whether the product is leasable.
 
 # Explicitly not-leasable accessory types
+
+- Bicycle locks of every type, including frame locks, folding locks, chain locks,
+  U-locks, integrated locks, and keyed-alike lock systems; fixed installation
+  does not provide an exception
 
 - Bags of any kind, including bicycle bags, panniers, cargo-bike bags, and bags
   made for a specific bike model
