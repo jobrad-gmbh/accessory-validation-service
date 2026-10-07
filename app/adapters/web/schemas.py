@@ -21,6 +21,9 @@ from app.domain.validation_results import (
     ValidationStatus,
 )
 from app.domain.validations.accessories.leasability import LeasabilityCriterionId
+from app.domain.validations.accessories.leasability.validation import (
+    AccessoryLeasabilityResult,
+)
 
 
 class AccessoryOrigin(BaseModel):
@@ -77,6 +80,10 @@ class AccessoryTestInput(AccessoryInput):
     """Accessory payload plus the LLM settings used only for this test run."""
 
     llm_settings: AccessoryTestLLMSettings
+    include_product_information: bool = Field(
+        default=False,
+        description="Include the product information used during validation in the response.",
+    )
     criterion_settings: dict[LeasabilityCriterionId, LLMModelSettings] = Field(
         default_factory=dict
     )
@@ -149,6 +156,44 @@ class ValidationReportResponse(BaseModel):
                 for execution in report.validations
             ],
         )
+
+
+class ProductInformationSourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    url: str
+    title: str | None = None
+
+
+class AccessoryProductInformationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    summary: str
+    model: str
+    used_web_search: bool
+    sources: list[ProductInformationSourceResponse]
+
+
+class AccessoryTestReportResponse(ValidationReportResponse):
+    """Test report with optionally included product information."""
+
+    product_information: AccessoryProductInformationResponse | None = None
+
+    @classmethod
+    def from_domain(
+        cls, report: ValidationReport, *, include_product_information: bool = False
+    ) -> "AccessoryTestReportResponse":
+        response = ValidationReportResponse.from_domain(report)
+        if include_product_information:
+            for execution in report.validations:
+                if isinstance(execution.result, AccessoryLeasabilityResult):
+                    return cls(
+                        **response.model_dump(),
+                        product_information=AccessoryProductInformationResponse.model_validate(
+                            execution.result.product_information
+                        ),
+                    )
+        return cls(**response.model_dump())
 
 
 class ErrorWebResponse(BaseModel):

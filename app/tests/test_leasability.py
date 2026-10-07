@@ -90,20 +90,22 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         monkeypatch.setattr(criterion, "evaluate", evaluate)
 
 
-def test_validation_retrieves_product_information_once(monkeypatch):
+@pytest.mark.parametrize("is_bawu", [False, True])
+def test_validation_retrieves_product_information_once(monkeypatch, is_bawu):
     calls = []
     criteria_with_answers(monkeypatch, {ORDER[0]: YES}, calls)
     information_service = AsyncMock(spec=AccessoryProductInformationService)
     information_service.retrieve.return_value = PRODUCT_INFORMATION
-    submitted = request()
+    submitted = request(is_bawu)
 
-    asyncio.run(
+    execution = asyncio.run(
         AccessoryLeasabilityValidation(
             AsyncMock(), information_service
         ).validate(submitted)
     )
 
     information_service.retrieve.assert_awaited_once_with(submitted.product)
+    assert execution.result.product_information is PRODUCT_INFORMATION
     assert calls == [ORDER[0], "special_rules"]
 
 

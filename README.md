@@ -54,6 +54,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate \
 `POST /api/v1/accessories/validate/test` runs the same validation and returns the
 same report, but stores nothing: no product, validation execution, or LLM request.
 
+Set `include_product_information` to `true` in the request body to include a
+top-level `product_information` object in the response. It contains the `summary`,
+`model`, `used_web_search`, and `sources` (each with `url` and optional `title`)
+used during validation. The flag defaults to `false`, which omits this field.
+Including it reuses the retrieved information and makes no extra LLM requests.
+
 It needs `llm_settings.api_key`. The server's `LITELLM_API_KEY` is never used by
 this endpoint. The other LLM settings are optional. Any setting you leave out uses
 the server's value.
@@ -72,6 +78,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/accessories/validate/test \
     "model": "Rear rack",
     "price": "49.99",
     "origin": {"source": "odoo", "external_ref": "ACC-42"},
+    "include_product_information": true,
     "llm_settings": {
       "api_key": "sk-your-own-key",
       "base_url": "https://litellm.example.com/v1",

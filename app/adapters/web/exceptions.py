@@ -1,13 +1,18 @@
+import logging
+
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.adapters.llm.errors import LLMError
 from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
 )
 
 from .schemas import ErrorListWebResponse, ErrorWebResponse
+
+logger = logging.getLogger("accessory_validator")
 
 
 async def validation_exception_handler(
@@ -53,11 +58,15 @@ async def validation_configuration_exception_handler(
 async def validation_execution_exception_handler(
     _: Request, exc: ValidationExecutionError
 ) -> JSONResponse:
+    details = str(exc)
+    if isinstance(exc.__cause__, LLMError):
+        details = str(exc.__cause__)
+        logger.warning("Validation failed: %s", details)
     return _domain_error_response(
         status.HTTP_503_SERVICE_UNAVAILABLE,
         "VALIDATION_EXECUTION_ERROR",
         "The validation could not be completed.",
-        str(exc),
+        details,
     )
 
 

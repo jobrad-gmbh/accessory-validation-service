@@ -21,13 +21,21 @@ PAYLOAD = {
 
 def llm_response(text, *, with_web_search=False):
     output = []
+    annotations = []
     if with_web_search:
         output.append({"type": "web_search_call", "id": "ws", "status": "completed"})
+        annotations.append(
+            {
+                "type": "url_citation",
+                "url": "https://manufacturer.example/rack",
+                "title": "Rear rack",
+            }
+        )
     output.append(
         {
             "type": "message",
             "role": "assistant",
-            "content": [{"type": "output_text", "text": text, "annotations": []}],
+            "content": [{"type": "output_text", "text": text, "annotations": annotations}],
         }
     )
     return {"object": "response", "status": "completed", "model": "m", "output": output}
@@ -44,7 +52,7 @@ def api():
         instructions = body.get("instructions", "")
         if body.get("tools"):
             text = "A rear rack."
-        elif "category-specific bicycle-leasing rules" in instructions:
+        elif '"leasable"' in instructions:
             text = '{"answer": "NO", "leasable": "UNKNOWN", "details": "None."}'
         elif "Decide whether the submitted product clearly matches" in instructions:
             text = '{"answer": "NO", "details": "Not excluded."}'
@@ -124,11 +132,11 @@ def test_general_settings_override_server_defaults(api):
     assert information_request["temperature"] == 0.1
     assert information_request["max_output_tokens"] == 300
     assert information_request["reasoning"] == {"effort": "low"}
-    # Criteria keep their default models, but inherit the other general settings.
+    # Criteria use their default models and reasoning, but inherit temperature.
     criterion_request = json.loads(requests[1].content)
-    assert criterion_request["model"] == "glm-5.3"
+    assert criterion_request["model"] == "gpt-6-luna"
     assert criterion_request["temperature"] == 0.1
-    assert criterion_request["reasoning"] == {"effort": "low"}
+    assert criterion_request["reasoning"] == {"effort": "xhigh"}
 
 
 def test_criterion_settings_apply_only_to_their_criterion(api):
@@ -144,7 +152,7 @@ def test_criterion_settings_apply_only_to_their_criterion(api):
 
     assert response.status_code == 200, response.text
     not_leasable, leasable = (json.loads(r.content) for r in requests[1:3])
-    assert not_leasable["model"] == "glm-5.3"
+    assert not_leasable["model"] == "gpt-6-luna"
     assert not_leasable["temperature"] == 0.3
     assert leasable["model"] == "special"
     assert leasable["temperature"] == 0
@@ -174,6 +182,89 @@ def test_rejects_invalid_criterion_settings(api, criterion_settings):
 
     assert response.status_code == 422
     assert requests == []
+
+
+@pytest.mark.parametrize("options", [{}, {"include_product_information": False}])
+def test_product_information_is_omitted_by_default_or_when_disabled(api, options):
+    client, *_ = api
+
+    response = post(client, llm_settings={"api_key": CALLER_KEY}, **options)
+
+    assert response.status_code == 200, response.text
+    assert "product_information" not in response.json()
+
+
+@pytest.mark.parametrize("is_bawu", [False, True])
+def test_includes_product_information_without_additional_requests_or_storage(
+    api, is_bawu
+):
+    client, requests, report_repository, llm_request_repository = api
+
+    response = post(
+        client,
+        llm_settings={"api_key": CALLER_KEY},
+        include_product_information=True,
+        context={"is_bawu_order": is_bawu},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["product_information"] == {
+        "summary": "A rear rack.",
+        "model": "m",
+        "used_web_search": True,
+        "sources": [{"url": "https://manufacturer.example/rack", "title": "Rear rack"}],
+    }
+    information_request = json.loads(requests[0].content)
+    assert information_request["tools"] == [{"type": "web_search"}]
+    assert information_request["tool_choice"] == "required"
+    assert sum(bool(json.loads(sent.content).get("tools")) for sent in requests) == 1
+    assert len(requests) == 1 + len(body["validations"][0]["criterion_results"])
+    report_repository.save.assert_not_awaited()
+    llm_request_repository.save.assert_not_awaited()
+
+
+def test_regular_validation_does_not_expose_product_information(api):
+    client, _, report_repository, _ = api
+
+    response = client.post("/api/v1/accessories/validate", json=PAYLOAD)
+
+    assert response.status_code == 200, response.text
+    assert "product_information" not in response.json()
+    report_repository.save.assert_awaited_once()
+
+
+@pytest.mark.parametrize("status", [400, 404, 429])
+def test_provider_errors_return_safe_details_and_log_them(api, monkeypatch, caplog, status):
+    client, _, report_repository, llm_request_repository = api
+    provider_response = httpx.Response(status, json={"error": {
+        "message": f"Unsupported parameter 'temperature'. API key: {CALLER_KEY}",
+        "param": "temperature",
+        "code": "unsupported_parameter",
+        "private_debug": "private provider debug data",
+    }})
+    monkeypatch.setattr(
+        app.state.http_client, "post", AsyncMock(return_value=provider_response)
+    )
+
+    response = post(client, llm_settings={"api_key": CALLER_KEY})
+
+    assert response.status_code == 503, response.text
+    error = response.json()["errors"][0]
+    assert error["code"] == "VALIDATION_EXECUTION_ERROR"
+    assert f"HTTP {status}" in error["details"]
+    assert "model 'server-model'" in error["details"]
+    assert "during 'product_information'" in error["details"]
+    assert "Unsupported parameter 'temperature'" in error["details"]
+    assert "param: temperature" in error["details"]
+    assert "code: unsupported_parameter" in error["details"]
+    for text in (response.text, caplog.text):
+        assert CALLER_KEY not in text
+        assert "private provider debug data" not in text
+    assert "Validation failed:" in caplog.text
+    assert "Unsupported parameter 'temperature'" in caplog.text
+    report_repository.save.assert_not_awaited()
+    llm_request_repository.save.assert_not_awaited()
 
 
 def test_api_key_is_not_echoed_in_validation_errors(api):
