@@ -1,4 +1,6 @@
 import asyncio
+import json
+import re
 from typing import Any, Literal, Mapping, Sequence
 
 import httpx
@@ -115,6 +117,25 @@ def _error_body(response: httpx.Response) -> dict[str, Any]:
     return error if isinstance(error, dict) else {}
 
 
+def _sanitize_error_message(
+    message: str, request: LLMRequestSpec, config: LLMClientConfig
+) -> str:
+    sensitive_values = [request.prompt, request.instructions]
+    if config.api_key is not None:
+        sensitive_values.append(config.api_key.get_secret_value())
+    for value in sorted(set(sensitive_values), key=len, reverse=True):
+        if value:
+            for representation in (value, json.dumps(value)[1:-1]):
+                message = message.replace(representation, "[REDACTED]")
+    message = re.sub(
+        r"\bBearer\s+\S+|\bsk-[\w-]+",
+        "[REDACTED]",
+        message,
+        flags=re.IGNORECASE,
+    )
+    return " ".join(message.split())[:1000]
+
+
 class LiteLLMClient:
     """Text generation through LiteLLM Proxy's Responses API endpoint."""
 
@@ -187,13 +208,14 @@ class LiteLLMClient:
     def _check_status(
         response: httpx.Response,
         model: str,
-        tools: Sequence[Mapping[str, Any]],
+        request: LLMRequestSpec,
+        config: LLMClientConfig,
     ) -> None:
         if not response.is_success:
             error = _error_body(response)
             message = str(error.get("message", "")).lower()
             requested_tool_types = {
-                str(tool.get("type", "")) for tool in tools if tool.get("type")
+                str(tool.get("type", "")) for tool in request.tools if tool.get("type")
             }
             unsupported = any(
                 phrase in message
@@ -218,8 +240,15 @@ class LiteLLMClient:
                 raise UnsupportedLLMToolError(
                     "web_search", model, status_code=response.status_code
                 )
+            details = f"LLM service returned HTTP {response.status_code} for model '{model}'"
+            if request.description:
+                details += f" during '{request.description}'"
+            for field in ("message", "param", "code", "type"):
+                value = error.get(field)
+                if isinstance(value, str) and value.strip():
+                    details += f"; {field}: {value}"
             raise LLMError(
-                f"LLM service returned HTTP {response.status_code}",
+                _sanitize_error_message(details, request, config),
                 status_code=response.status_code,
             )
 
@@ -244,7 +273,7 @@ class LiteLLMClient:
                 raise LLMError("Could not reach the LLM service") from None
             if self._model_not_found(response):
                 continue
-            self._check_status(response, model, request.tools)
+            self._check_status(response, model, request, selected)
             result = _decode(response.content)
             content = _text(result)
             return LLMResponse(

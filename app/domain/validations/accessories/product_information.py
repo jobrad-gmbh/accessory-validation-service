@@ -16,10 +16,7 @@ from app.domain.errors import (
 from app.domain.product import ProductInput
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / "product_information.md"
-WEB_SEARCH_TOOL = {
-    "type": "web_search",
-    "parameters": {"engine": "auto", "max_results": 5},
-}
+WEB_SEARCH_TOOL = {"type": "web_search"}
 
 
 @dataclass(frozen=True)

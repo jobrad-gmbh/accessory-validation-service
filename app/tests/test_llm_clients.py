@@ -51,7 +51,84 @@ def response(text="Hello", status="completed", *, with_tool_call=False):
 
 
 @pytest.mark.asyncio
-async def test_generate_fallback_and_request_overrides():
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 500])
+async def test_structured_provider_errors_include_actionable_details(status):
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(
+            status,
+            json={"error": {
+                "message": "Unsupported reasoning effort 'xhigh'.",
+                "param": "reasoning.effort",
+                "code": "unsupported_parameter",
+                "type": "invalid_request_error",
+                "private_debug": "sensitive provider body",
+            }},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        with pytest.raises(LLMError) as error:
+            await LiteLLMClient(http, config()).generate(
+                LLMRequestSpec(prompt="sensitive prompt", description="special_rules")
+            )
+
+    details = str(error.value)
+    assert error.value.status_code == status
+    assert f"HTTP {status}" in details
+    assert "model 'first'" in details
+    assert "during 'special_rules'" in details
+    assert "Unsupported reasoning effort 'xhigh'." in details
+    assert "param: reasoning.effort" in details
+    assert "code: unsupported_parameter" in details
+    assert "type: invalid_request_error" in details
+    assert "sensitive" not in details
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_errors_redact_request_content_and_overridden_credentials():
+    caller_key = "arbitrary-caller-credential"
+    prompt = 'Private product\nwith "quotes"'
+    instructions = "Private validation instructions"
+
+    def handle(request):
+        return httpx.Response(400, json={"error": {
+            "message": (
+                f"Invalid request: {json.dumps(prompt)[1:-1]}; {instructions}; "
+                f"key={caller_key}; Bearer downstream-credential; sk-upstream-secret"
+            ),
+        }})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        client = LiteLLMClient(http, config(api_key="server-credential"))
+        with pytest.raises(LLMError) as error:
+            await client.generate(LLMRequestSpec(
+                prompt=prompt,
+                instructions=instructions,
+                config=client.config.with_overrides(api_key=caller_key),
+            ))
+
+    details = str(error.value)
+    assert "Invalid request" in details
+    assert "[REDACTED]" in details
+    for sensitive in (caller_key, "Private", "downstream-credential", "sk-upstream-secret"):
+        assert sensitive not in details
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {"type": "web_search"},
+        {
+            "type": "openrouter:web_search",
+            "parameters": {"engine": "auto", "max_results": 5},
+        },
+    ],
+)
+async def test_generate_fallback_and_request_overrides(tool):
     requests = []
 
     def handle(request):
@@ -79,12 +156,7 @@ async def test_generate_fallback_and_request_overrides():
                 prompt="Hello",
                 instructions="Be brief",
                 config=override,
-                tools=(
-                    {
-                        "type": "openrouter:web_search",
-                        "parameters": {"engine": "auto", "max_results": 5},
-                    },
-                ),
+                tools=(tool,),
                 tool_choice="required",
             )
         )
@@ -102,12 +174,7 @@ async def test_generate_fallback_and_request_overrides():
     assert bodies[-1]["max_output_tokens"] == 50
     assert bodies[-1]["input"] == "Hello"
     assert bodies[-1]["instructions"] == "Be brief"
-    assert bodies[-1]["tools"] == [
-        {
-            "type": "openrouter:web_search",
-            "parameters": {"engine": "auto", "max_results": 5},
-        }
-    ]
+    assert bodies[-1]["tools"] == [tool]
     assert bodies[-1]["tool_choice"] == "required"
     assert bodies[-1]["store"] is False
     assert str(requests[-1].url) == "https://llm.example/v1/responses"
