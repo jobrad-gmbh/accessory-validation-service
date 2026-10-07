@@ -68,6 +68,10 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         if isinstance(configured, (CriterionResult, SpecialRuleResult)):
             assert configured.criterion_id == self.id
             return configured
+        if self.id == "special_rules":
+            return SpecialRuleResult(
+                configured, UNKNOWN, "Deterministic criterion answer.", self.id
+            )
         return CriterionResult(configured, "Deterministic criterion answer.", self.id)
 
     for criterion in (
@@ -78,6 +82,10 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         strategies.StvzoEquipmentCriterion,
         strategies.FunctionalUnitWithBicycleCriterion,
         strategies.PermanentlyMountedCriterion,
+        strategies.BawuExplicitlyLeasableAccessoryTypeCriterion,
+        strategies.BawuExplicitlyNotLeasableAccessoryTypeCriterion,
+        strategies.BawuFunctionalUnitWithBicycleCriterion,
+        strategies.BawuSpecialRulesCriterion,
     ):
         monkeypatch.setattr(criterion, "evaluate", evaluate)
 
@@ -137,6 +145,31 @@ def test_special_rules_preserve_type_specific_outcomes(
 
 @pytest.mark.parametrize("is_bawu", [False, True])
 @pytest.mark.parametrize("default", [NO, UNKNOWN])
+@pytest.mark.parametrize("leasable", [YES, NO])
+def test_special_rules_decide_without_an_explicit_type_match(
+    monkeypatch, is_bawu, default, leasable
+):
+    calls = []
+    special = SpecialRuleResult(YES, leasable, "Special rule decides.", "special_rules")
+    criteria_with_answers(
+        monkeypatch,
+        {"special_rules": special, "technical_bicycle_component": YES},
+        calls,
+        default,
+    )
+
+    execution = asyncio.run(validation().validate(request(is_bawu)))
+
+    assert execution.result.status is (
+        ValidationStatus.PASSED if leasable is YES else ValidationStatus.REJECTED
+    )
+    assert execution.result.details == special.details
+    assert calls == [*ORDER[:2], "special_rules"]
+    assert execution.result.criterion_results[-1] == special
+
+
+@pytest.mark.parametrize("is_bawu", [False, True])
+@pytest.mark.parametrize("default", [NO, UNKNOWN])
 @pytest.mark.parametrize("accepting_criterion", [None, *ORDER[2:]])
 def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
     monkeypatch, is_bawu, default, accepting_criterion
@@ -147,6 +180,7 @@ def test_fallback_checks_short_circuit_and_bawu_skips_stvzo(
     execution = asyncio.run(validation().validate(request(is_bawu)))
 
     applicable = [name for name in ORDER if not (is_bawu and name == "stvzo_equipment")]
+    applicable.insert(2, "special_rules")
     passed = accepting_criterion in applicable
     expected_calls = (
         applicable[: applicable.index(accepting_criterion) + 1]

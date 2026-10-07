@@ -68,7 +68,7 @@ class LLMClientConfig(BaseSettings, LLMConnectionSettings, LLMModelSettings):
 
     base_url: HttpUrl
     models: Models
-    timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
+    timeout_seconds: float = Field(default=180, gt=0, allow_inf_nan=False)
 
     @classmethod
     def from_env(cls) -> Self:

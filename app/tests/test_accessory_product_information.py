@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 
 import pytest
 from pydantic import HttpUrl
@@ -39,18 +40,20 @@ class FakeLLMClient:
         return self.response
 
 
-def product() -> ProductInput:
+def product(price: Decimal | None = None) -> ProductInput:
     return ProductInput(
         product_type=ProductType.ACCESSORY,
         brand="Ortlieb",
         model="Quick Rack",
         category="rear rack",
         year=2025,
+        price=price,
     )
 
 
 @pytest.mark.asyncio
-async def test_retrieves_condensed_information_with_required_web_search():
+@pytest.mark.parametrize("price", [None, Decimal("0"), Decimal("49.99")])
+async def test_retrieves_condensed_information_with_required_web_search(price):
     source = LLMSource("https://manufacturer.example/rack", "Quick Rack")
     client = FakeLLMClient(
         LLMResponse(
@@ -62,7 +65,7 @@ async def test_retrieves_condensed_information_with_required_web_search():
         )
     )
 
-    result = await AccessoryProductInformationService(client).retrieve(product())
+    result = await AccessoryProductInformationService(client).retrieve(product(price))
 
     assert result.summary == "A removable rear bicycle rack."
     assert result.used_web_search is True
@@ -79,6 +82,7 @@ async def test_retrieves_condensed_information_with_required_web_search():
     assert json.loads(call.prompt) == {
         "brand": "Ortlieb",
         "model": "Quick Rack",
+        "price": str(price) if price is not None else None,
         "category": "rear rack",
         "year": 2025,
         "size": None,

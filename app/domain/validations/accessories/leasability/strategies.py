@@ -20,6 +20,13 @@ from app.domain.validations.accessories.product_information import (
     AccessoryProductInformation,
 )
 
+from app.domain.validations.accessories.leasability.bawu_criteria import (
+    BawuExplicitlyLeasableAccessoryTypeCriterion,
+    BawuExplicitlyNotLeasableAccessoryTypeCriterion,
+    BawuFunctionalUnitWithBicycleCriterion,
+    BawuSpecialRulesCriterion,
+)
+
 CriterionOutcome = TypeVar(
     "CriterionOutcome", CriterionResult, SpecialRuleResult, covariant=True
 )
@@ -53,6 +60,14 @@ async def standard_leasability_strategy(
             SpecialRulesCriterion(litellm_client), request, product_information
         )
         return _apply_special_rule(True, leasable, special_rule, collector)
+
+    special_rule = await collector.run(
+        SpecialRulesCriterion(litellm_client), request, product_information
+    )
+    if special_rule.answer is CriterionAnswer.YES:
+        return _result(
+            special_rule.leasable is CriterionAnswer.YES, special_rule, collector
+        )
 
     technical_component = await collector.run(
         TechnicalBicycleComponentCriterion(litellm_client), request, product_information
@@ -88,26 +103,34 @@ async def bawu_leasability_strategy(
 ) -> ValidationResult:
     collector = _CriterionResultCollector(criterion_settings)
     not_leasable = await collector.run(
-        ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
+        BawuExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
         request,
         product_information,
     )
     if not_leasable.answer is CriterionAnswer.YES:
         special_rule = await collector.run(
-            SpecialRulesCriterion(litellm_client), request, product_information
+            BawuSpecialRulesCriterion(litellm_client), request, product_information
         )
         return _apply_special_rule(False, not_leasable, special_rule, collector)
 
     leasable = await collector.run(
-        ExplicitlyLeasableAccessoryTypeCriterion(litellm_client),
+        BawuExplicitlyLeasableAccessoryTypeCriterion(litellm_client),
         request,
         product_information,
     )
     if leasable.answer is CriterionAnswer.YES:
         special_rule = await collector.run(
-            SpecialRulesCriterion(litellm_client), request, product_information
+            BawuSpecialRulesCriterion(litellm_client), request, product_information
         )
         return _apply_special_rule(True, leasable, special_rule, collector)
+
+    special_rule = await collector.run(
+        BawuSpecialRulesCriterion(litellm_client), request, product_information
+    )
+    if special_rule.answer is CriterionAnswer.YES:
+        return _result(
+            special_rule.leasable is CriterionAnswer.YES, special_rule, collector
+        )
 
     technical_component = await collector.run(
         TechnicalBicycleComponentCriterion(litellm_client), request, product_information
@@ -116,7 +139,7 @@ async def bawu_leasability_strategy(
         return _result(True, technical_component, collector)
 
     functional_unit = await collector.run(
-        FunctionalUnitWithBicycleCriterion(litellm_client), request, product_information
+        BawuFunctionalUnitWithBicycleCriterion(litellm_client), request, product_information
     )
     if functional_unit.answer is CriterionAnswer.YES:
         return _result(True, functional_unit, collector)

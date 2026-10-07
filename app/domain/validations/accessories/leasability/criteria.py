@@ -14,7 +14,7 @@ from app.domain.validations.accessories.product_information import (
     AccessoryProductInformation,
 )
 
-DEFAULT_MODELS = ("glm-5.3", "gpt-6-luna")
+DEFAULT_MODELS = ("gpt-6-luna", "glm-5.3")
 
 LeasabilityCriterionId = Literal[
     "explicitly_not_leasable_type",
@@ -126,7 +126,7 @@ async def _generate_structured_response(
     settings: LLMModelSettings | None,
     description: str | None = None,
 ) -> ResponseModel:
-    config = llm_client.config.with_overrides(models=DEFAULT_MODELS)
+    config = llm_client.config.with_overrides(models=DEFAULT_MODELS, reasoning_effort="xhigh")
     if settings is not None:
         config = config.with_settings(settings)
     response = await llm_client.generate(

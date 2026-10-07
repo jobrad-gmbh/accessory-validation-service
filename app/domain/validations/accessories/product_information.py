@@ -78,6 +78,7 @@ def _product_prompt(product: ProductInput) -> str:
         {
             "brand": product.brand,
             "model": product.model,
+            "price": str(product.price) if product.price is not None else None,
             "category": product.category,
             "year": product.year,
             "size": product.size,
