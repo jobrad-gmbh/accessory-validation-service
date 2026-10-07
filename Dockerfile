@@ -3,7 +3,7 @@ FROM python:${PYTHON_VERSION}-alpine3.22
 
 RUN apk add --no-cache postgresql17-client
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /bin/
+COPY --from=docker.io/astral/uv:0.12.13 /uv /uvx /bin/
 
 WORKDIR /service
 
