@@ -30,10 +30,12 @@ class _BawuPromptCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client, request, product_information,
             PROMPTS / f"{self.id}.md", _CriterionResponse, settings, self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 

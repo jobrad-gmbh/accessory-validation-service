@@ -24,8 +24,8 @@ container applies migrations before starting.
 Products and validation executions are saved atomically. Criterion results are
 returned in the validation response but are not stored separately. LLM requests
 are saved as they happen, including failed requests.
-Their `validation_execution_id` can be used to join successful validations to
-their requests. Requests from a failed validation may have no matching execution.
+Each request stores the `product_id` and `validation_id` that caused it. These
+are not foreign keys: requests from a failed validation have no stored product.
 
 ## Validate an accessory
 

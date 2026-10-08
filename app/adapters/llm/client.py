@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
+from uuid import UUID
 
 from app.adapters.llm.config import LLMClientConfig
 
@@ -36,6 +37,8 @@ class LLMRequestSpec:
     tool_choice: str | Mapping[str, Any] | None = None
     # Metadata for observability only; never sent to the model.
     description: str | None = None
+    product_id: UUID | None = None
+    validation_id: str | None = None
 
 
 class LLMClient(Protocol):

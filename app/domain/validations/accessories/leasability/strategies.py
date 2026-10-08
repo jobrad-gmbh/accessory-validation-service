@@ -33,8 +33,10 @@ async def standard_leasability_strategy(
     litellm_client: LLMClient,
     product_information: AccessoryProductInformation,
     criterion_settings: Mapping[str, LLMModelSettings] | None = None,
+    *,
+    validation_id: str | None = None,
 ) -> ValidationResult:
-    collector = _CriterionResultCollector(criterion_settings)
+    collector = _CriterionResultCollector(criterion_settings, validation_id)
     not_leasable = await collector.run(
         ExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
         request,
@@ -96,8 +98,10 @@ async def bawu_leasability_strategy(
     litellm_client: LLMClient,
     product_information: AccessoryProductInformation,
     criterion_settings: Mapping[str, LLMModelSettings] | None = None,
+    *,
+    validation_id: str | None = None,
 ) -> ValidationResult:
-    collector = _CriterionResultCollector(criterion_settings)
+    collector = _CriterionResultCollector(criterion_settings, validation_id)
     not_leasable = await collector.run(
         BawuExplicitlyNotLeasableAccessoryTypeCriterion(litellm_client),
         request,
@@ -157,14 +161,20 @@ class _LeasabilityCriterion(Protocol):
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult: ...
 
 
 class _CriterionResultCollector:
     """Evaluate criteria with their settings and keep results in evaluation order."""
 
-    def __init__(self, settings: Mapping[str, LLMModelSettings] | None = None) -> None:
+    def __init__(
+        self,
+        settings: Mapping[str, LLMModelSettings] | None = None,
+        validation_id: str | None = None,
+    ) -> None:
         self._settings = settings or {}
+        self._validation_id = validation_id
         self._results: list[CriterionResult] = []
 
     async def run(
@@ -174,7 +184,10 @@ class _CriterionResultCollector:
         product_information: AccessoryProductInformation,
     ) -> CriterionResult:
         outcome = await criterion.evaluate(
-            request, product_information, settings=self._settings.get(criterion.id)
+            request,
+            product_information,
+            settings=self._settings.get(criterion.id),
+            validation_id=self._validation_id,
         )
         self._results.append(outcome)
         return outcome

@@ -44,7 +44,7 @@ class AccessoryLeasabilityValidation(Validation):
         self, request: ValidationRequest
     ) -> AccessoryLeasabilityResult:
         product_information = await self._product_information_service.retrieve(
-            request.product
+            request.product, product_id=request.product.id, validation_id=self.id
         )
         strategy = (
             bawu_leasability_strategy
@@ -52,7 +52,11 @@ class AccessoryLeasabilityValidation(Validation):
             else standard_leasability_strategy
         )
         result = await strategy(
-            request, self._litellm_client, product_information, self._criterion_settings
+            request,
+            self._litellm_client,
+            product_information,
+            self._criterion_settings,
+            validation_id=self.id,
         )
         return AccessoryLeasabilityResult(
             status=result.status,

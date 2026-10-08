@@ -55,9 +55,10 @@ llm_request = Table(
     "llm_request",
     metadata,
     Column("id", UUID(as_uuid=True), primary_key=True),
-    # Requests are written during validation, before its execution is committed.
-    # Failed validations also have requests but no persisted execution.
-    Column("validation_execution_id", UUID(as_uuid=True), index=True),
+    # Not a foreign key: requests are written before the product is committed,
+    # and failed validations have requests but no persisted product.
+    Column("product_id", UUID(as_uuid=True), index=True),
+    Column("validation_id", Text),
     Column("description", Text),
     Column("prompt", Text, nullable=False),
     Column("instructions", Text, nullable=False),

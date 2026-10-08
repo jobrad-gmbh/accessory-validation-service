@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID
 
 from app.adapters.llm import (
     LLMClientConfig,
@@ -39,6 +40,8 @@ class AccessoryProductInformationService:
         *,
         use_web_search: bool = True,
         config: LLMClientConfig | None = None,
+        product_id: UUID | None = None,
+        validation_id: str | None = None,
     ) -> AccessoryProductInformation:
         tools = (WEB_SEARCH_TOOL,) if use_web_search else ()
         tool_choice = "required" if use_web_search else None
@@ -51,6 +54,8 @@ class AccessoryProductInformationService:
                     tools=tools,
                     tool_choice=tool_choice,
                     description="product_information",
+                    product_id=product_id,
+                    validation_id=validation_id,
                 )
             )
         except UnsupportedLLMToolError as error:

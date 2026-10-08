@@ -53,7 +53,8 @@ def upgrade() -> None:
     op.create_table(
         "llm_request",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("validation_execution_id", postgresql.UUID(as_uuid=True)),
+        sa.Column("product_id", postgresql.UUID(as_uuid=True)),
+        sa.Column("validation_id", sa.Text()),
         sa.Column("description", sa.Text()),
         sa.Column("prompt", sa.Text(), nullable=False),
         sa.Column("instructions", sa.Text(), nullable=False),
@@ -67,13 +68,11 @@ def upgrade() -> None:
         sa.Column("total_tokens", sa.Integer()),
         sa.Column("error", sa.Text()),
     )
-    op.create_index(
-        "ix_llm_request_validation_execution_id", "llm_request", ["validation_execution_id"]
-    )
+    op.create_index("ix_llm_request_product_id", "llm_request", ["product_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_llm_request_validation_execution_id", table_name="llm_request")
+    op.drop_index("ix_llm_request_product_id", table_name="llm_request")
     op.drop_table("llm_request")
     op.drop_table("validation_execution")
     op.drop_index("ix_product_origin", table_name="product")

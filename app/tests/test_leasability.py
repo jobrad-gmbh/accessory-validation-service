@@ -61,7 +61,10 @@ def validation():
 
 
 def criteria_with_answers(monkeypatch, answers, calls, default=NO):
-    async def evaluate(self, submitted, product_information, *, settings=None):
+    async def evaluate(
+        self, submitted, product_information, *, settings=None, validation_id=None
+    ):
+        assert validation_id == "accessory_leasability"
         assert product_information is PRODUCT_INFORMATION
         calls.append(self.id)
         configured = answers.get(
@@ -102,7 +105,11 @@ def test_validation_retrieves_product_information_once(monkeypatch, is_bawu):
         ).validate(submitted)
     )
 
-    information_service.retrieve.assert_awaited_once_with(submitted.product)
+    information_service.retrieve.assert_awaited_once_with(
+        submitted.product,
+        product_id=submitted.product.id,
+        validation_id="accessory_leasability",
+    )
     assert execution.result.product_information is PRODUCT_INFORMATION
     assert calls == [ORDER[0], "special_rules"]
 
@@ -291,13 +298,16 @@ def test_explicitly_not_leasable_type_uses_llm_result(answer):
         {"answer": answer.value, "details": "Classification reason."}
     )
 
+    submitted = request()
     result = asyncio.run(
         criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(
-            request(), PRODUCT_INFORMATION
+            submitted, PRODUCT_INFORMATION, validation_id="accessory_leasability"
         )
     )
 
     assert result == CriterionResult(answer, "Classification reason.", "explicitly_not_leasable_type")
+    assert client.generate.await_args.args[0].product_id == submitted.product.id
+    assert client.generate.await_args.args[0].validation_id == "accessory_leasability"
     product_payload = json.loads(client.generate.await_args.args[0].prompt)
     assert product_payload["brand"] == "Example"
     assert product_payload["model"] == "Rack"

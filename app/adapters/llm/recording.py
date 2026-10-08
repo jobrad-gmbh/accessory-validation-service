@@ -8,16 +8,16 @@ from uuid import UUID, uuid4
 
 from app.adapters.llm.client import LLMClient, LLMRequestSpec, LLMResponse
 from app.adapters.llm.config import LLMClientConfig
-from app.domain.execution_context import current_validation_execution_id
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
 class LLMRequest:
-    """One attempted generation, associated with the validation that caused it."""
+    """One attempted generation, associated with the product and validation that caused it."""
 
-    validation_execution_id: UUID | None
+    product_id: UUID | None
+    validation_id: str | None
     prompt: str
     instructions: str
     instructions_hash: str
@@ -62,7 +62,8 @@ class RecordingLLMClient:
         finally:
             await self._record(
                 LLMRequest(
-                    validation_execution_id=current_validation_execution_id(),
+                    product_id=request.product_id,
+                    validation_id=request.validation_id,
                     prompt=request.prompt,
                     instructions=request.instructions,
                     description=request.description,

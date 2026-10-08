@@ -140,7 +140,8 @@ def test_llm_request_save_keeps_response_and_validation_identity():
     engine = RecordingEngine()
     execution = report().validations[0]
     request = LLMRequest(
-        validation_execution_id=execution.id,
+        product_id=execution.product.id,
+        validation_id=execution.validation_id,
         description="leasability_check",
         prompt="Is this leasable?",
         instructions="Answer briefly",
@@ -164,7 +165,8 @@ def test_llm_request_save_keeps_response_and_validation_identity():
     assert engine.committed
     table, row = engine.connection.statements[0]
     assert table == "llm_request"
-    assert row["validation_execution_id"] == execution.id
+    assert row["product_id"] == execution.product.id
+    assert row["validation_id"] == "accessory_leasability"
     assert row["description"] == "leasability_check"
     assert row["requested_models"] == ["first", "second"]
     assert row["response"]["sources"] == [

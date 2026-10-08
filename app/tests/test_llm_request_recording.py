@@ -9,7 +9,6 @@ from app.adapters.llm import (
     LLMResponse,
     RecordingLLMClient,
 )
-from app.domain.execution_context import current_validation_execution_id
 from app.domain.product import Product, ProductOrigin, ProductType
 from app.domain.validation import Validation, ValidationRequest
 from app.domain.validation_results import ValidationResult, ValidationStatus
@@ -46,10 +45,18 @@ class MakesTwoLLMRequests(Validation):
     async def evaluate_result(self, request):
         await self._llm_client.generate(
             LLMRequestSpec(
-                prompt="first", instructions="Be brief", description="first_check"
+                prompt="first",
+                instructions="Be brief",
+                description="first_check",
+                product_id=request.product.id,
+                validation_id=self.id,
             )
         )
-        await self._llm_client.generate(LLMRequestSpec(prompt="second"))
+        await self._llm_client.generate(
+            LLMRequestSpec(
+                prompt="second", product_id=request.product.id, validation_id=self.id
+            )
+        )
         return ValidationResult(status=ValidationStatus.PASSED, details="Passed.")
 
 
@@ -61,30 +68,31 @@ def recorded_client(**generate):
     return client, requests
 
 
-def test_requests_are_associated_with_the_validation_execution():
+def test_requests_are_associated_with_the_product_and_validation():
     client, requests = recorded_client(return_value=RESPONSE)
+    submitted = request()
 
-    execution = asyncio.run(MakesTwoLLMRequests(client).validate(request()))
+    asyncio.run(MakesTwoLLMRequests(client).validate(submitted))
 
     assert [request.prompt for request in requests] == ["first", "second"]
-    assert all(request.validation_execution_id == execution.id for request in requests)
+    assert all(request.product_id == submitted.product.id for request in requests)
+    assert all(request.validation_id == "makes_two_llm_requests" for request in requests)
     assert requests[0].response is RESPONSE
     assert requests[0].instructions == "Be brief"
     assert [request.description for request in requests] == ["first_check", None]
     forwarded = client.inner_llm_client.generate.await_args_list[0].args[0]
-    assert forwarded == LLMRequestSpec(
-        prompt="first", instructions="Be brief", description="first_check"
-    )
+    assert forwarded.prompt == "first"
+    assert forwarded.instructions == "Be brief"
     assert requests[0].requested_models == ("default-model",)
     assert requests[0].instructions_hash != requests[1].instructions_hash
-    assert current_validation_execution_id() is None
 
 
-def test_requests_outside_a_validation_have_no_execution_id():
+def test_requests_outside_a_validation_have_no_identity():
     client, requests = recorded_client(return_value=RESPONSE)
 
     assert asyncio.run(client.generate(LLMRequestSpec(prompt="hello"))) is RESPONSE
-    assert requests[0].validation_execution_id is None
+    assert requests[0].product_id is None
+    assert requests[0].validation_id is None
 
 
 def test_failed_requests_are_recorded_and_reraised():
@@ -108,19 +116,3 @@ def test_storage_failure_does_not_change_generation_result():
 
     assert asyncio.run(client.generate(LLMRequestSpec(prompt="hello"))) is RESPONSE
     repository.save.assert_awaited_once()
-
-
-def test_concurrent_validations_keep_their_own_execution_id():
-    client, requests = recorded_client(return_value=RESPONSE)
-
-    async def run_both():
-        return await asyncio.gather(
-            MakesTwoLLMRequests(client).validate(request()),
-            MakesTwoLLMRequests(client).validate(request()),
-        )
-
-    first, second = asyncio.run(run_both())
-
-    ids = [request.validation_execution_id for request in requests]
-    assert ids.count(first.id) == 2
-    assert ids.count(second.id) == 2

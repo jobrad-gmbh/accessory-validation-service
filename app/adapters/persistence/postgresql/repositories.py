@@ -73,7 +73,8 @@ class PostgresLLMRequestRepository:
             await connection.execute(
                 insert(llm_request).values(
                     id=request.id,
-                    validation_execution_id=request.validation_execution_id,
+                    product_id=request.product_id,
+                    validation_id=request.validation_id,
                     description=request.description,
                     prompt=request.prompt,
                     instructions=request.instructions,

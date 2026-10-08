@@ -109,6 +109,7 @@ async def _generate_structured_response(
     response_model: type[ResponseModel],
     settings: LLMModelSettings | None,
     description: str | None = None,
+    validation_id: str | None = None,
 ) -> ResponseModel:
     config = llm_client.config.with_overrides(models=DEFAULT_MODELS, reasoning_effort="xhigh")
     if settings is not None:
@@ -119,6 +120,8 @@ async def _generate_structured_response(
             instructions=load_prompt(prompt_path, response_model),
             description=description,
             config=config,
+            product_id=request.product.id,
+            validation_id=validation_id,
         )
     )
     text = response.text.strip()
@@ -143,6 +146,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -152,6 +156,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -168,6 +173,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -177,6 +183,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -193,6 +200,7 @@ class TechnicalBicycleComponentCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -202,6 +210,7 @@ class TechnicalBicycleComponentCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -218,6 +227,7 @@ class StvzoEquipmentCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -227,6 +237,7 @@ class StvzoEquipmentCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -243,6 +254,7 @@ class FunctionalUnitWithBicycleCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -252,6 +264,7 @@ class FunctionalUnitWithBicycleCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -268,6 +281,7 @@ class PermanentlyMountedCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -277,6 +291,7 @@ class PermanentlyMountedCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -293,6 +308,7 @@ class SpecialRulesCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -302,5 +318,6 @@ class SpecialRulesCriterion:
             _CriterionResponse,
             settings,
             self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
