@@ -3,10 +3,10 @@ import re
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.adapters.llm import LLMClient, LLMModelSettings, LLMRequestSpec
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation import (
     ValidationRequest,
 )
@@ -56,23 +56,6 @@ class _CriterionResponse(BaseModel):
 
     answer: CriterionAnswer
     details: str = Field(min_length=1)
-
-
-class _SpecialRulesResponse(_CriterionResponse):
-    leasable: CriterionAnswer
-
-    @model_validator(mode="after")
-    def validate_leasable_matches_answer(self) -> "_SpecialRulesResponse":
-        if self.answer is CriterionAnswer.YES:
-            if self.leasable is CriterionAnswer.UNKNOWN:
-                raise ValueError(
-                    "leasable must be YES or NO when a special rule matches"
-                )
-        elif self.leasable is not CriterionAnswer.UNKNOWN:
-            raise ValueError(
-                "leasable must be UNKNOWN when no definitive special rule matches"
-            )
-        return self
 
 
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
@@ -310,14 +293,14 @@ class SpecialRulesCriterion:
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
-    ) -> SpecialRuleResult:
+    ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
             product_information,
             SPECIAL_RULES_PROMPT_PATH,
-            _SpecialRulesResponse,
+            _CriterionResponse,
             settings,
             self.id,
         )
-        return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)
+        return CriterionResult(result.answer, result.details, self.id)

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.adapters.persistence.postgresql import PostgresLLMRequestRepository, PostgresValidationReportRepository
 from app.adapters.llm.client import LLMResponse, LLMSource, LLMUsage
 from app.adapters.llm.recording import LLMRequest
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.product import Product, ProductOrigin, ProductType
 from app.domain.validation_results import (
     ReportStatus,
@@ -71,8 +71,8 @@ def report(
             details="Not leasable.",
             criterion_results=(
                 CriterionResult(CriterionAnswer.YES, "Fixed.", "mounted"),
-                SpecialRuleResult(
-                    CriterionAnswer.YES, CriterionAnswer.NO, "Override.", "special_rules"
+                CriterionResult(
+                    CriterionAnswer.NO, "Override.", "special_rules"
                 ),
             ),
         ),

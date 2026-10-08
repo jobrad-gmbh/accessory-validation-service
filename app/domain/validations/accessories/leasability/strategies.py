@@ -1,10 +1,10 @@
 """Standard and BAWU leasability flows expressed as ordinary Python."""
 
 from collections.abc import Mapping
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from app.adapters.llm import LLMClient, LLMModelSettings
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation import ValidationRequest
 from app.domain.validation_results import ValidationResult, ValidationStatus
 from app.domain.validations.accessories.leasability.criteria import (
@@ -25,10 +25,6 @@ from app.domain.validations.accessories.leasability.bawu_criteria import (
     BawuExplicitlyNotLeasableAccessoryTypeCriterion,
     BawuFunctionalUnitWithBicycleCriterion,
     BawuSpecialRulesCriterion,
-)
-
-CriterionOutcome = TypeVar(
-    "CriterionOutcome", CriterionResult, SpecialRuleResult, covariant=True
 )
 
 
@@ -64,9 +60,9 @@ async def standard_leasability_strategy(
     special_rule = await collector.run(
         SpecialRulesCriterion(litellm_client), request, product_information
     )
-    if special_rule.answer is CriterionAnswer.YES and special_rule.leasable is not CriterionAnswer.UNKNOWN:
+    if special_rule.answer is not CriterionAnswer.UNKNOWN:
         return _result(
-            special_rule.leasable is CriterionAnswer.YES, special_rule, collector
+            special_rule.answer is CriterionAnswer.YES, special_rule, collector
         )
 
     technical_component = await collector.run(
@@ -127,9 +123,9 @@ async def bawu_leasability_strategy(
     special_rule = await collector.run(
         BawuSpecialRulesCriterion(litellm_client), request, product_information
     )
-    if special_rule.answer is CriterionAnswer.YES and special_rule.leasable is not CriterionAnswer.UNKNOWN:
+    if special_rule.answer is not CriterionAnswer.UNKNOWN:
         return _result(
-            special_rule.leasable is CriterionAnswer.YES, special_rule, collector
+            special_rule.answer is CriterionAnswer.YES, special_rule, collector
         )
 
     technical_component = await collector.run(
@@ -152,7 +148,7 @@ async def bawu_leasability_strategy(
     return _no_qualifying_criterion_result(collector, is_bawu=True)
 
 
-class _LeasabilityCriterion(Protocol[CriterionOutcome]):
+class _LeasabilityCriterion(Protocol):
     id: str
 
     async def evaluate(
@@ -161,7 +157,7 @@ class _LeasabilityCriterion(Protocol[CriterionOutcome]):
         product_information: AccessoryProductInformation,
         *,
         settings: LLMModelSettings | None = None,
-    ) -> CriterionOutcome: ...
+    ) -> CriterionResult: ...
 
 
 class _CriterionResultCollector:
@@ -169,14 +165,14 @@ class _CriterionResultCollector:
 
     def __init__(self, settings: Mapping[str, LLMModelSettings] | None = None) -> None:
         self._settings = settings or {}
-        self._results: list[CriterionResult | SpecialRuleResult] = []
+        self._results: list[CriterionResult] = []
 
     async def run(
         self,
-        criterion: _LeasabilityCriterion[CriterionOutcome],
+        criterion: _LeasabilityCriterion,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
-    ) -> CriterionOutcome:
+    ) -> CriterionResult:
         outcome = await criterion.evaluate(
             request, product_information, settings=self._settings.get(criterion.id)
         )
@@ -184,13 +180,13 @@ class _CriterionResultCollector:
         return outcome
 
     @property
-    def results(self) -> tuple[CriterionResult | SpecialRuleResult, ...]:
+    def results(self) -> tuple[CriterionResult, ...]:
         return tuple(self._results)
 
 
 def _result(
     leasable: bool,
-    source: CriterionResult | SpecialRuleResult,
+    source: CriterionResult,
     collector: _CriterionResultCollector,
 ) -> ValidationResult:
     return ValidationResult(
@@ -221,11 +217,11 @@ def _no_qualifying_criterion_result(
 def _apply_special_rule(
     default_leasable: bool,
     default_result: CriterionResult,
-    special_rule: SpecialRuleResult,
+    special_rule: CriterionResult,
     collector: _CriterionResultCollector,
 ) -> ValidationResult:
-    if special_rule.answer is CriterionAnswer.YES:
+    if special_rule.answer is not CriterionAnswer.UNKNOWN:
         return _result(
-            special_rule.leasable is CriterionAnswer.YES, special_rule, collector
+            special_rule.answer is CriterionAnswer.YES, special_rule, collector
         )
     return _result(default_leasable, default_result, collector)

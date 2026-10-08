@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from app.adapters.llm import LLMClient, LLMModelSettings
-from app.domain.criterion import CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionResult
 from app.domain.validation import ValidationRequest
 from app.domain.validations.accessories.leasability.criteria import (
     ExplicitlyLeasableAccessoryTypeCriterion,
@@ -11,7 +11,6 @@ from app.domain.validations.accessories.leasability.criteria import (
     FunctionalUnitWithBicycleCriterion,
     SpecialRulesCriterion,
     _CriterionResponse,
-    _SpecialRulesResponse,
     _generate_structured_response,
 )
 from app.domain.validations.accessories.product_information import AccessoryProductInformation
@@ -57,16 +56,5 @@ class BawuFunctionalUnitWithBicycleCriterion(
     pass
 
 
-class BawuSpecialRulesCriterion(SpecialRulesCriterion):
-    async def evaluate(
-        self,
-        request: ValidationRequest,
-        product_information: AccessoryProductInformation,
-        *,
-        settings: LLMModelSettings | None = None,
-    ) -> SpecialRuleResult:
-        result = await _generate_structured_response(
-            self._llm_client, request, product_information,
-            PROMPTS / f"{self.id}.md", _SpecialRulesResponse, settings, self.id,
-        )
-        return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)
+class BawuSpecialRulesCriterion(_BawuPromptCriterion, SpecialRulesCriterion):
+    pass

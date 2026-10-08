@@ -14,7 +14,7 @@ from app.domain.product import (
 from app.domain.validation import (
     ValidationRequest,
 )
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation_results import (
     ReportStatus,
     ValidationReport,
@@ -97,20 +97,9 @@ class CriterionResultResponse(BaseModel):
     details: str
 
 
-class SpecialRuleResultResponse(CriterionResultResponse):
-    leasable: CriterionAnswer
-
-
 def _criterion_response(
-    result: CriterionResult | SpecialRuleResult,
+    result: CriterionResult,
 ) -> CriterionResultResponse:
-    if isinstance(result, SpecialRuleResult):
-        return SpecialRuleResultResponse(
-            criterion_id=result.criterion_id,
-            answer=result.answer,
-            details=result.details,
-            leasable=result.leasable,
-        )
     return CriterionResultResponse(
         criterion_id=result.criterion_id,
         answer=result.answer,
@@ -125,7 +114,7 @@ class ValidationResponse(BaseModel):
     validation_id: str
     status: ValidationStatus
     details: str
-    criterion_results: list[SpecialRuleResultResponse | CriterionResultResponse]
+    criterion_results: list[CriterionResultResponse]
     executed_at: datetime
 
 

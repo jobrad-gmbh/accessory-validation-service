@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.adapters.llm import LiteLLMConfig, LLMModelSettings
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.errors import ValidationExecutionError
 from app.domain.product import Product, ProductContext, ProductOrigin, ProductType
 from app.domain.validation import ValidationRequest
@@ -64,14 +64,12 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
     async def evaluate(self, submitted, product_information, *, settings=None):
         assert product_information is PRODUCT_INFORMATION
         calls.append(self.id)
-        configured = answers.get(self.id, default)
-        if isinstance(configured, (CriterionResult, SpecialRuleResult)):
+        configured = answers.get(
+            self.id, UNKNOWN if self.id == "special_rules" else default
+        )
+        if isinstance(configured, CriterionResult):
             assert configured.criterion_id == self.id
             return configured
-        if self.id == "special_rules":
-            return SpecialRuleResult(
-                configured, UNKNOWN, "Deterministic criterion answer.", self.id
-            )
         return CriterionResult(configured, "Deterministic criterion answer.", self.id)
 
     for criterion in (
@@ -114,10 +112,10 @@ def test_validation_retrieves_product_information_once(monkeypatch, is_bawu):
 @pytest.mark.parametrize(
     "special",
     [
-        SpecialRuleResult(YES, YES, "A leasable special rule matched.", "special_rules"),
-        SpecialRuleResult(YES, NO, "A non-leasable special rule matched.", "special_rules"),
-        SpecialRuleResult(NO, UNKNOWN, "No special rule matched.", "special_rules"),
-        SpecialRuleResult(UNKNOWN, UNKNOWN, "The match could not be determined.", "special_rules"),
+        CriterionResult(YES, "A leasable special rule matched.", "special_rules"),
+        CriterionResult(NO, "A non-leasable special rule matched.", "special_rules"),
+        CriterionResult(UNKNOWN, "No special rule matched.", "special_rules"),
+        CriterionResult(UNKNOWN, "Eligibility could not be determined.", "special_rules"),
     ],
 )
 def test_special_rules_preserve_type_specific_outcomes(
@@ -131,7 +129,7 @@ def test_special_rules_preserve_type_specific_outcomes(
     submitted = request(is_bawu)
     execution = asyncio.run(validation().validate(submitted))
 
-    passed = special.leasable is YES if special.answer is YES else not excluded
+    passed = special.answer is YES if special.answer is not UNKNOWN else not excluded
     assert execution.result.status is (
         ValidationStatus.PASSED if passed else ValidationStatus.REJECTED
     )
@@ -140,19 +138,19 @@ def test_special_rules_preserve_type_specific_outcomes(
     assert calls == ([ORDER[0]] if excluded else list(ORDER[:2])) + ["special_rules"]
     assert execution.result.details == (
         special.details
-        if special.answer is YES
+        if special.answer is not UNKNOWN
         else "Deterministic criterion answer."
     )
 
 
 @pytest.mark.parametrize("is_bawu", [False, True])
 @pytest.mark.parametrize("default", [NO, UNKNOWN])
-@pytest.mark.parametrize("leasable", [YES, NO])
+@pytest.mark.parametrize("answer", [YES, NO])
 def test_special_rules_decide_without_an_explicit_type_match(
-    monkeypatch, is_bawu, default, leasable
+    monkeypatch, is_bawu, default, answer
 ):
     calls = []
-    special = SpecialRuleResult(YES, leasable, "Special rule decides.", "special_rules")
+    special = CriterionResult(answer, "Special rule decides.", "special_rules")
     criteria_with_answers(
         monkeypatch,
         {"special_rules": special, "technical_bicycle_component": YES},
@@ -163,7 +161,7 @@ def test_special_rules_decide_without_an_explicit_type_match(
     execution = asyncio.run(validation().validate(request(is_bawu)))
 
     assert execution.result.status is (
-        ValidationStatus.PASSED if leasable is YES else ValidationStatus.REJECTED
+        ValidationStatus.PASSED if answer is YES else ValidationStatus.REJECTED
     )
     assert execution.result.details == special.details
     assert calls == [*ORDER[:2], "special_rules"]
@@ -224,7 +222,7 @@ def test_decisive_criterion_provides_validation_details(monkeypatch):
 
 def test_criterion_results_list_every_evaluated_criterion_in_order(monkeypatch):
     calls = []
-    special = SpecialRuleResult(NO, UNKNOWN, "No special rule matched.", "special_rules")
+    special = CriterionResult(UNKNOWN, "No special rule matched.", "special_rules")
     criteria_with_answers(
         monkeypatch, {ORDER[1]: YES, "special_rules": special}, calls
     )
@@ -234,7 +232,7 @@ def test_criterion_results_list_every_evaluated_criterion_in_order(monkeypatch):
     assert execution.result.criterion_results == (
         CriterionResult(NO, "Deterministic criterion answer.", criterion_id=ORDER[0]),
         CriterionResult(YES, "Deterministic criterion answer.", criterion_id=ORDER[1]),
-        SpecialRuleResult(NO, UNKNOWN, special.details, criterion_id="special_rules"),
+        CriterionResult(UNKNOWN, special.details, criterion_id="special_rules"),
     )
 
 
@@ -249,18 +247,18 @@ def test_criterion_results_match_short_circuited_criteria(monkeypatch, is_bawu):
     assert execution.result.criterion_results[-1].answer is YES
 
 
-def test_special_rule_result_keeps_leasable_answer(monkeypatch):
+def test_special_rule_result_keeps_eligibility_answer(monkeypatch):
     calls = []
     criteria_with_answers(
         monkeypatch,
-        {ORDER[0]: YES, "special_rules": SpecialRuleResult(YES, NO, "Override.", "special_rules")},
+        {ORDER[0]: YES, "special_rules": CriterionResult(NO, "Override.", "special_rules")},
         calls,
     )
 
     execution = asyncio.run(validation().validate(request()))
 
-    assert execution.result.criterion_results[-1] == SpecialRuleResult(
-        YES, NO, "Override.", criterion_id="special_rules"
+    assert execution.result.criterion_results[-1] == CriterionResult(
+        NO, "Override.", criterion_id="special_rules"
     )
 
 
@@ -429,16 +427,9 @@ def test_remaining_criteria_use_llm_results(criterion_class, prompt_heading):
     assert client.generate.await_args.args[0].config.models == criteria.DEFAULT_MODELS
 
 
-@pytest.mark.parametrize(
-    "answer,leasable",
-    [
-        (YES, YES),
-        (YES, NO),
-        (NO, UNKNOWN),
-        (UNKNOWN, UNKNOWN),
-    ],
-)
-def test_special_rules_use_leasability_result(answer, leasable):
+@pytest.mark.parametrize("is_bawu", [False, True])
+@pytest.mark.parametrize("answer", list(CriterionAnswer))
+def test_special_rules_use_single_eligibility_answer(is_bawu, answer):
     client = AsyncMock()
     client.config = LiteLLMConfig(
         base_url="https://gateway.example/v1",
@@ -447,20 +438,23 @@ def test_special_rules_use_leasability_result(answer, leasable):
     client.generate.return_value.text = json.dumps(
         {
             "answer": answer.value,
-            "leasable": leasable.value,
             "details": "Special-rule reason.",
         }
     )
 
+    criterion_class = (
+        strategies.BawuSpecialRulesCriterion if is_bawu else criteria.SpecialRulesCriterion
+    )
     result = asyncio.run(
-        criteria.SpecialRulesCriterion(client).evaluate(request(), PRODUCT_INFORMATION)
+        criterion_class(client).evaluate(request(is_bawu), PRODUCT_INFORMATION)
     )
 
-    assert result == SpecialRuleResult(answer, leasable, "Special-rule reason.", "special_rules")
+    assert result == CriterionResult(answer, "Special-rule reason.", "special_rules")
     instructions = client.generate.await_args.args[0].instructions
-    assert "The listed negative cases are rule matches too." in instructions
+    assert 'Is this accessory leasable according to the matched rule?' in instructions
+    assert "when no special rule applies" in instructions
     schema = json.loads(instructions.rsplit("```json\n", 1)[1].removesuffix("```"))
-    assert set(schema["properties"]) == {"answer", "leasable", "details"}
+    assert set(schema["properties"]) == {"answer", "details"}
 
 
 @pytest.mark.parametrize("is_bawu", [False, True])
@@ -472,7 +466,7 @@ def test_special_rules_receive_submitted_euro_price(is_bawu, price):
     client = AsyncMock()
     client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("test",))
     client.generate.return_value.text = json.dumps({
-        "answer": "NO", "leasable": "UNKNOWN", "details": "No special rule matched."
+        "answer": "UNKNOWN", "details": "No special rule matched."
     })
     submitted = request(is_bawu)
     submitted = replace(submitted, product=replace(
@@ -492,36 +486,36 @@ def test_special_rules_receive_submitted_euro_price(is_bawu, price):
     assert "29 EUR" in spec.instructions
 
 
-@pytest.mark.parametrize(
-    "answer,leasable",
-    [
-        (YES, UNKNOWN),
-        (NO, YES),
-        (NO, NO),
-        (UNKNOWN, YES),
-        (UNKNOWN, NO),
-    ],
-)
-def test_special_rules_reject_contradictory_results(answer, leasable):
+@pytest.mark.parametrize("is_bawu", [False, True])
+def test_unknown_battery_special_rule_continues_to_technical_component(is_bawu):
     client = AsyncMock()
     client.config = LiteLLMConfig(
         base_url="https://gateway.example/v1",
         models=("client-default",),
     )
-    client.generate.return_value.text = json.dumps(
-        {
-            "answer": answer.value,
-            "leasable": leasable.value,
-            "details": "Contradictory result.",
-        }
+    responses = [
+        {"answer": "NO", "details": "No explicit exclusion."},
+        {"answer": "NO", "details": "No explicit approval."},
+        {"answer": "UNKNOWN", "details": "The e-bike battery's role is unclear."},
+        {"answer": "YES", "details": "A technical bicycle component."},
+    ]
+    client.generate.side_effect = [
+        type("Response", (), {"text": json.dumps(response)})()
+        for response in responses
+    ]
+    strategy = (
+        strategies.bawu_leasability_strategy if is_bawu
+        else strategies.standard_leasability_strategy
     )
 
-    with pytest.raises(ValueError, match="invalid criterion response"):
-        asyncio.run(
-            criteria.SpecialRulesCriterion(client).evaluate(
-                request(), PRODUCT_INFORMATION
-            )
-        )
+    result = asyncio.run(strategy(request(is_bawu), client, PRODUCT_INFORMATION))
+
+    assert result.status is ValidationStatus.PASSED
+    assert [r.criterion_id for r in result.criterion_results] == [
+        *ORDER[:2], "special_rules", "technical_bicycle_component"
+    ]
+    assert result.criterion_results[2].answer is UNKNOWN
+    assert client.generate.await_count == 4
 
 
 def test_criterion_overrides_apply_only_to_one_call():

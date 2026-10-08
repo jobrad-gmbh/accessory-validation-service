@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from app.domain.criterion import CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionResult
 from app.domain.product import (
     Product,
 )
@@ -30,7 +30,7 @@ class ValidationResult:
 
     status: ValidationStatus
     details: str
-    criterion_results: tuple[CriterionResult | SpecialRuleResult, ...] = ()
+    criterion_results: tuple[CriterionResult, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ValidationStatus):
@@ -39,7 +39,7 @@ class ValidationResult:
             raise ValueError("Validation result details cannot be blank")
         object.__setattr__(self, "criterion_results", tuple(self.criterion_results))
         if any(
-            not isinstance(result, (CriterionResult, SpecialRuleResult))
+            not isinstance(result, CriterionResult)
             or not result.criterion_id
             for result in self.criterion_results
         ):

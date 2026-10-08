@@ -103,6 +103,11 @@ Criterion ids: `explicitly_not_leasable_type`, `explicitly_leasable_type`,
 `technical_bicycle_component`, `stvzo_equipment`, `functional_unit_with_bicycle`,
 `permanently_mounted`, `special_rules`.
 
+Like other criteria, `special_rules` returns `answer` and `details`. Its answer
+means eligibility under the applicable special rule: `YES` approves, `NO`
+rejects, and `UNKNOWN` follows the existing strategy fallback. If no special
+rule applies, its answer is `UNKNOWN`. There is no separate `leasable` field.
+
 ## Batch validation from JSONL
 
 Put one accessory object on each nonblank line of an input `.jsonl` file:

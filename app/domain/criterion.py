@@ -15,11 +15,3 @@ class CriterionResult:
     answer: CriterionAnswer
     details: str
     criterion_id: str
-
-
-@dataclass(frozen=True)
-class SpecialRuleResult:
-    answer: CriterionAnswer
-    leasable: CriterionAnswer
-    details: str
-    criterion_id: str

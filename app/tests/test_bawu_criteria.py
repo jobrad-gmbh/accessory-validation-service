@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.adapters.llm import LiteLLMConfig, LLMModelSettings
-from app.domain.criterion import CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionResult
 from app.domain.validations.accessories.leasability import bawu_criteria, criteria
 from app.tests.test_leasability import PRODUCT_INFORMATION, request
 
@@ -20,13 +20,10 @@ def test_bawu_criteria_use_separate_prompts_and_response_contracts(criterion_cla
     client = AsyncMock()
     client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("default",))
     response = {"answer": "YES", "details": "Confirmed installation."}
-    special = criterion_class is bawu_criteria.BawuSpecialRulesCriterion
-    if special:
-        response["leasable"] = "YES"
     client.generate.return_value.text = json.dumps(response)
     settings = LLMModelSettings(models=("bw-test-model",))
     result = asyncio.run(criterion_class(client).evaluate(request(True), PRODUCT_INFORMATION, settings=settings))
-    assert isinstance(result, SpecialRuleResult if special else CriterionResult)
+    assert isinstance(result, CriterionResult)
     assert result.criterion_id == criterion_class.id
     spec = client.generate.await_args.args[0]
     assert "Land BW 2.0" in spec.instructions
@@ -74,7 +71,7 @@ def test_bawu_lfz_exclusion_stops_before_approval_fallbacks(accessory, policy_te
     client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("test",))
     client.generate.side_effect = [
         type("Response", (), {"text": json.dumps({"answer": "YES", "details": "The LFZ Land BW column excludes this type."})})(),
-        type("Response", (), {"text": json.dumps({"answer": "YES", "leasable": "NO", "details": "The LFZ exclusion applies even when fixed."})})(),
+        type("Response", (), {"text": json.dumps({"answer": "NO", "details": "The LFZ exclusion applies even when fixed."})})(),
     ]
     submitted = request(True)
     submitted = replace(submitted, product=replace(submitted.product, model=accessory))
@@ -98,7 +95,7 @@ def test_bawu_standalone_frame_lock_can_use_the_lfz_exception():
     responses = [
         {"answer": "NO", "details": "A standalone frame lock is not an excluded lock type."},
         {"answer": "YES", "details": "A fixed frame lock matches the LFZ exception."},
-        {"answer": "YES", "leasable": "YES", "details": "The fixed frame lock costs 49 EUR."},
+        {"answer": "YES", "details": "The fixed frame lock costs 49 EUR."},
     ]
     client.generate.side_effect = [
         type("Response", (), {"text": json.dumps(response)})()

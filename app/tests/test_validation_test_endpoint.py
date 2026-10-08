@@ -52,8 +52,8 @@ def api():
         instructions = body.get("instructions", "")
         if body.get("tools"):
             text = "A rear rack."
-        elif '"leasable"' in instructions:
-            text = '{"answer": "NO", "leasable": "UNKNOWN", "details": "None."}'
+        elif 'Is this accessory leasable according to the matched rule?' in instructions:
+            text = '{"answer": "UNKNOWN", "details": "No special rule matched."}'
         elif "Decide whether the submitted product clearly matches" in instructions:
             text = '{"answer": "NO", "details": "Not excluded."}'
         else:
@@ -276,3 +276,48 @@ def test_api_key_is_not_echoed_in_validation_errors(api):
 
     assert response.status_code == 422
     assert CALLER_KEY not in response.text
+
+
+@pytest.mark.parametrize("is_bawu", [False, True])
+@pytest.mark.parametrize(
+    "answer,status", [("YES", "VALID"), ("NO", "INVALID"), ("UNKNOWN", "VALID")]
+)
+def test_special_rule_eligibility_answer_controls_strategy(
+    api, monkeypatch, is_bawu, answer, status
+):
+    client, _, report_repository, llm_request_repository = api
+    responses = [
+        httpx.Response(
+            200, json=llm_response("An e-bike battery.", with_web_search=True)
+        ),
+        *[
+            httpx.Response(200, json=llm_response(json.dumps(criterion_answer)))
+            for criterion_answer in [
+                {"answer": "NO", "details": "No explicit exclusion."},
+                {"answer": "NO", "details": "No explicit approval."},
+                {"answer": answer, "details": "Battery special-rule eligibility."},
+                {"answer": "YES", "details": "Technical component."},
+            ]
+        ],
+    ]
+    generate = AsyncMock(side_effect=responses)
+    monkeypatch.setattr(app.state.http_client, "post", generate)
+
+    response = post(
+        client, brand="Bosch", model="600wh",
+        context={"is_bawu_order": is_bawu}, llm_settings={"api_key": CALLER_KEY}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == status
+    results = response.json()["validations"][0]["criterion_results"]
+    assert results[2] == {
+        "criterion_id": "special_rules",
+        "answer": answer,
+        "details": "Battery special-rule eligibility.",
+    }
+    assert generate.await_count == (5 if answer == "UNKNOWN" else 4)
+    if answer == "UNKNOWN":
+        assert results[-1]["criterion_id"] == "technical_bicycle_component"
+    report_repository.save.assert_not_awaited()
+    llm_request_repository.save.assert_not_awaited()
