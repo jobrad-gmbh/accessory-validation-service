@@ -261,10 +261,31 @@ def test_provider_errors_return_safe_details_and_log_them(api, monkeypatch, capl
     for text in (response.text, caplog.text):
         assert CALLER_KEY not in text
         assert "private provider debug data" not in text
-    assert "Validation failed:" in caplog.text
+    assert "Validation accessory_leasability failed: LLMError:" in caplog.text
     assert "Unsupported parameter 'temperature'" in caplog.text
     report_repository.save.assert_not_awaited()
     llm_request_repository.save.assert_not_awaited()
+
+
+def test_unexpected_failures_are_internal_errors_with_logged_cause(
+    api, monkeypatch, caplog
+):
+    client, _, report_repository, _ = api
+    monkeypatch.setattr(
+        app.state.http_client,
+        "post",
+        AsyncMock(side_effect=RuntimeError("internal detail")),
+    )
+
+    response = post(client, llm_settings={"api_key": CALLER_KEY})
+
+    assert response.status_code == 500, response.text
+    error = response.json()["errors"][0]
+    assert error["code"] == "INTERNAL_ERROR"
+    assert "internal detail" not in response.text
+    assert "RuntimeError: internal detail" in caplog.text
+    assert "Traceback" in caplog.text
+    report_repository.save.assert_not_awaited()
 
 
 def test_api_key_is_not_echoed_in_validation_errors(api):

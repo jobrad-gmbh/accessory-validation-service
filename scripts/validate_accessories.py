@@ -284,7 +284,7 @@ async def run_batch(args: argparse.Namespace, output: TextIO) -> tuple[int, int]
 def error_message(exc: BaseException) -> str:
     if isinstance(exc, BaseExceptionGroup):
         return "; ".join(error_message(child) for child in exc.exceptions)
-    return str(exc)
+    return f"{type(exc).__name__}: {exc}"
 
 
 def main(argv: list[str] | None = None) -> int:

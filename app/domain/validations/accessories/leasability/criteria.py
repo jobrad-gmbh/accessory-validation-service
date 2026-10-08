@@ -5,7 +5,13 @@ from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.adapters.llm import LLMClient, LLMModelSettings, LLMRequestSpec
+from app.adapters.llm import (
+    LLMClient,
+    LLMModelSettings,
+    LLMRequestSpec,
+    LLMResponseError,
+    summarize_validation_error,
+)
 from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation import (
     ValidationRequest,
@@ -130,8 +136,11 @@ async def _generate_structured_response(
         text = fence.group(1).strip()
     try:
         return response_model.model_validate_json(text)
-    except ValidationError:
-        raise ValueError("LLM returned an invalid criterion response") from None
+    except ValidationError as error:
+        raise LLMResponseError(
+            f"Model '{response.model}' returned an invalid criterion response"
+            f" during '{description}': {summarize_validation_error(error)}"
+        ) from error
 
 
 class ExplicitlyNotLeasableAccessoryTypeCriterion:

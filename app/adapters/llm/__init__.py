@@ -25,6 +25,7 @@ from app.adapters.llm.errors import (
     LLMTimeoutError,
     ModelsNotFoundError,
     UnsupportedLLMToolError,
+    summarize_validation_error,
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
 from app.adapters.llm.recording import (
@@ -57,4 +58,5 @@ __all__ = [
     "ModelsNotFoundError",
     "RecordingLLMClient",
     "UnsupportedLLMToolError",
+    "summarize_validation_error",
 ]

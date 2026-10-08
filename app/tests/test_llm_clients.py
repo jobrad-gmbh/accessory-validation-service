@@ -340,6 +340,41 @@ async def test_invalid_responses(body):
 
 
 @pytest.mark.asyncio
+async def test_invalid_responses_keep_cause_and_failure_details():
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"object": "response", "output": []}),
+        )
+    ) as http:
+        with pytest.raises(LLMResponseError) as error:
+            await LiteLLMClient(http, config()).generate(LLMRequestSpec(prompt="hi"))
+    assert isinstance(error.value.__cause__, ValidationError)
+    assert "model 'first'" in str(error.value)
+    assert "status: Field required" in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_failed_responses_report_provider_error_without_request_content():
+    body = {
+        "object": "response",
+        "status": "failed",
+        "output": [],
+        "error": {"code": "server_error", "message": "Failed on: private prompt"},
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+    ) as http:
+        with pytest.raises(LLMResponseError) as error:
+            await LiteLLMClient(http, config()).generate(
+                LLMRequestSpec(prompt="private prompt")
+            )
+    details = str(error.value)
+    assert "status: failed" in details
+    assert "code: server_error" in details
+    assert "private prompt" not in details
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "error,expected",
     [
@@ -356,9 +391,12 @@ async def test_transport_errors_and_cancellation(error, expected):
         raise error
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        with pytest.raises(expected):
+        with pytest.raises(expected) as raised:
             await LiteLLMClient(http, config()).generate(LLMRequestSpec(prompt="hi"))
     assert len(calls) == 1
+    if expected is not asyncio.CancelledError:
+        assert raised.value.__cause__ is error
+        assert "secret" not in str(raised.value)
 
 
 @pytest.mark.asyncio

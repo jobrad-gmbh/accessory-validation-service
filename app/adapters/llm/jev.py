@@ -13,6 +13,7 @@ from app.adapters.llm.errors import (
     LLMResponseError,
     LLMTimeoutError,
     ModelsNotFoundError,
+    summarize_validation_error,
 )
 
 State = str | dict[str, JsonValue] | list[JsonValue]
@@ -113,10 +114,16 @@ class JevClient:
                         timeout=selected.timeout_seconds,
                         follow_redirects=False,
                     )
-            except (TimeoutError, httpx.TimeoutException):
-                raise LLMTimeoutError("Jev request timed out") from None
-            except httpx.RequestError:
-                raise LLMError("Could not reach the Jev service") from None
+            except (TimeoutError, httpx.TimeoutException) as exc:
+                raise LLMTimeoutError(
+                    f"Jev request for model '{model}' timed out after "
+                    f"{selected.timeout_seconds:g}s"
+                ) from exc
+            except httpx.RequestError as exc:
+                raise LLMError(
+                    f"Could not reach the Jev service for model '{model}' "
+                    f"({type(exc).__name__})"
+                ) from exc
             if not response.is_success:
                 # The public docs do not specify a missing-model error format.
                 # Accept an explicit code, never guess from a generic 404/422.
@@ -132,13 +139,17 @@ class JevClient:
                 ):
                     continue
                 raise LLMError(
-                    f"Jev service returned HTTP {response.status_code}",
+                    f"Jev service returned HTTP {response.status_code} "
+                    f"for model '{model}'",
                     status_code=response.status_code,
                 )
             try:
                 result = JevResponse.model_validate_json(response.content)
-            except ValidationError:
-                raise LLMResponseError("Invalid Jev response") from None
+            except ValidationError as exc:
+                raise LLMResponseError(
+                    f"Invalid Jev response for model '{model}': "
+                    f"{summarize_validation_error(exc)}"
+                ) from exc
             self._validate_answers(request, result)
             return result
         raise ModelsNotFoundError(selected.models)

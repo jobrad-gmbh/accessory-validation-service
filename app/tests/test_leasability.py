@@ -3,9 +3,9 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from app.adapters.llm import LiteLLMConfig, LLMModelSettings
+from app.adapters.llm import LiteLLMConfig, LLMModelSettings, LLMResponseError
 from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.errors import ValidationExecutionError
 from app.domain.product import Product, ProductContext, ProductOrigin, ProductType
@@ -284,6 +284,8 @@ def test_criterion_failures_are_technical_errors(monkeypatch):
     ) as exc:
         asyncio.run(service.validate(request()))
     assert exc.value.__cause__ is failure
+    assert exc.value.validation_id == "accessory_leasability"
+    assert "RuntimeError: Provider unavailable" in str(exc.value)
     assert calls == []
 
 
@@ -376,13 +378,17 @@ def test_explicitly_not_leasable_type_rejects_invalid_llm_result(response):
         models=("client-default",),
     )
     client.generate.return_value.text = response
+    client.generate.return_value.model = "criterion-model"
 
-    with pytest.raises(ValueError, match="invalid criterion response"):
+    with pytest.raises(LLMResponseError, match="invalid criterion response") as error:
         asyncio.run(
             criteria.ExplicitlyNotLeasableAccessoryTypeCriterion(client).evaluate(
                 request(), PRODUCT_INFORMATION
             )
         )
+    assert "Model 'criterion-model'" in str(error.value)
+    assert "during 'explicitly_not_leasable_type'" in str(error.value)
+    assert isinstance(error.value.__cause__, ValidationError)
 
 
 @pytest.mark.parametrize("answer", list(CriterionAnswer))

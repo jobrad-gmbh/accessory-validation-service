@@ -3,11 +3,16 @@ class ValidationConfigurationError(ValueError):
 
 
 class ValidationExecutionError(Exception):
-    """A technical failure prevented validation."""
+    """A validation could not be completed.
 
+    The original error is always chained as ``__cause__``.
+    """
 
-class ProductResolutionError(Exception):
-    """A technical failure prevented product resolution."""
+    def __init__(self, validation_id: str, cause: BaseException) -> None:
+        self.validation_id = validation_id
+        super().__init__(
+            f"Validation {validation_id} failed: {type(cause).__name__}: {cause}"
+        )
 
 
 class ProductInformationRetrievalError(Exception):

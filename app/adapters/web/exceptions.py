@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.llm.errors import LLMError
 from app.domain.errors import (
+    ProductInformationRetrievalError,
     ValidationConfigurationError,
     ValidationExecutionError,
 )
@@ -47,6 +48,7 @@ async def validation_exception_handler(
 async def validation_configuration_exception_handler(
     _: Request, exc: ValidationConfigurationError
 ) -> JSONResponse:
+    logger.error("Invalid validation configuration: %s", exc, exc_info=exc)
     return _domain_error_response(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "VALIDATION_CONFIGURATION_ERROR",
@@ -58,15 +60,32 @@ async def validation_configuration_exception_handler(
 async def validation_execution_exception_handler(
     _: Request, exc: ValidationExecutionError
 ) -> JSONResponse:
-    details = str(exc)
-    if isinstance(exc.__cause__, LLMError):
-        details = str(exc.__cause__)
-        logger.warning("Validation failed: %s", details)
+    cause = exc.__cause__
+    if isinstance(cause, (LLMError, ProductInformationRetrievalError)):
+        # Messages of these errors are sanitized and safe to return.
+        logger.warning("%s", exc, exc_info=exc)
+        return _domain_error_response(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VALIDATION_EXECUTION_ERROR",
+            "The validation could not be completed.",
+            str(cause),
+        )
+    logger.error("%s", exc, exc_info=exc)
     return _domain_error_response(
-        status.HTTP_503_SERVICE_UNAVAILABLE,
-        "VALIDATION_EXECUTION_ERROR",
-        "The validation could not be completed.",
-        details,
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "INTERNAL_ERROR",
+        "The validation failed unexpectedly.",
+        f"Validation {exc.validation_id} failed due to an internal error.",
+    )
+
+
+async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+    # Starlette re-raises the exception after this response, so it is logged there.
+    return _domain_error_response(
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "INTERNAL_ERROR",
+        "An unexpected error occurred.",
+        "The request failed due to an internal error.",
     )
 
 

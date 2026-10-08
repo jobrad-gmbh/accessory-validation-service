@@ -111,6 +111,7 @@ async def test_unsupported_search_model_has_actionable_domain_error():
         await AccessoryProductInformationService(client).retrieve(product())
 
     assert error.value.model == "local-model"
+    assert isinstance(error.value.__cause__, UnsupportedLLMToolError)
     assert "Choose a web-search-capable model or disable web search" in str(
         error.value
     )

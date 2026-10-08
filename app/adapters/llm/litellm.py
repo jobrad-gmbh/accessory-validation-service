@@ -15,6 +15,7 @@ from app.adapters.llm.errors import (
     LLMTimeoutError,
     ModelsNotFoundError,
     UnsupportedLLMToolError,
+    summarize_validation_error,
 )
 
 
@@ -58,27 +59,46 @@ class _Response(BaseModel):
     usage: _Usage | None = None
 
 
-def _decode(data: str | bytes) -> _Response:
+def _decode(data: str | bytes, model: str) -> _Response:
     try:
         return _Response.model_validate_json(data)
-    except ValidationError:
-        raise LLMResponseError("Invalid Responses API response") from None
+    except ValidationError as error:
+        raise LLMResponseError(
+            f"Invalid Responses API response for model '{model}': "
+            f"{summarize_validation_error(error)}"
+        ) from error
 
 
-def _text(response: _Response) -> str:
+def _text(
+    response: _Response,
+    model: str,
+    request: LLMRequestSpec,
+    config: LLMClientConfig,
+) -> str:
     if response.status != "completed" or response.error is not None:
-        raise LLMResponseError("Incomplete model response")
+        details = f"Incomplete response from model '{model}'; status: {response.status}"
+        for field in ("code", "message"):
+            value = (response.error or {}).get(field)
+            if isinstance(value, str) and value.strip():
+                details += f"; {field}: {value}"
+        raise LLMResponseError(_sanitize_error_message(details, request, config))
     text_parts = []
     for item in response.output:
         if item.type != "message":
             continue
         for part in item.content or []:
             if part.type == "refusal" and part.refusal:
-                raise LLMResponseError("The model refused the request")
+                raise LLMResponseError(
+                    _sanitize_error_message(
+                        f"Model '{model}' refused the request: {part.refusal}",
+                        request,
+                        config,
+                    )
+                )
             if part.type == "output_text" and part.text:
                 text_parts.append(part.text)
     if not text_parts:
-        raise LLMResponseError("Empty model response")
+        raise LLMResponseError(f"Empty response from model '{model}'")
     return "\n".join(text_parts)
 
 
@@ -267,15 +287,21 @@ class LiteLLMClient:
                             request.tool_choice,
                         )
                     )
-            except (TimeoutError, httpx.TimeoutException):
-                raise LLMTimeoutError("LLM request timed out") from None
-            except httpx.RequestError:
-                raise LLMError("Could not reach the LLM service") from None
+            except (TimeoutError, httpx.TimeoutException) as error:
+                raise LLMTimeoutError(
+                    f"LLM request for model '{model}' timed out after "
+                    f"{selected.timeout_seconds:g}s"
+                ) from error
+            except httpx.RequestError as error:
+                raise LLMError(
+                    f"Could not reach the LLM service for model '{model}' "
+                    f"({type(error).__name__})"
+                ) from error
             if self._model_not_found(response):
                 continue
             self._check_status(response, model, request, selected)
-            result = _decode(response.content)
-            content = _text(result)
+            result = _decode(response.content, model)
+            content = _text(result, model, request, selected)
             return LLMResponse(
                 content,
                 result.model or model,

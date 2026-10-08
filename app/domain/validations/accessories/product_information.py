@@ -59,7 +59,7 @@ class AccessoryProductInformationService:
                 )
             )
         except UnsupportedLLMToolError as error:
-            raise WebSearchNotSupportedError(error.model) from None
+            raise WebSearchNotSupportedError(error.model) from error
 
         used_web_search = "web_search_call" in response.tool_calls
         if use_web_search and not used_web_search:
