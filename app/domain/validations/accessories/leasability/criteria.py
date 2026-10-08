@@ -55,6 +55,7 @@ PERMANENTLY_MOUNTED_PROMPT_PATH = (
 )
 
 SPECIAL_RULES_PROMPT_PATH = Path(__file__).with_name("prompts") / "special_rules.md"
+BAWU_PROMPTS = Path(__file__).with_name("prompts") / "bawu"
 
 
 class _CriterionResponse(BaseModel):
@@ -66,7 +67,9 @@ class _CriterionResponse(BaseModel):
 
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
-_JSON_CODE_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL | re.IGNORECASE)
+_JSON_CODE_FENCE = re.compile(
+    r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL | re.IGNORECASE
+)
 
 
 def load_prompt(path: Path, response_model: type[BaseModel]) -> str:
@@ -117,7 +120,9 @@ async def _generate_structured_response(
     description: str | None = None,
     validation_id: str | None = None,
 ) -> ResponseModel:
-    config = llm_client.config.with_overrides(models=DEFAULT_MODELS, reasoning_effort="xhigh")
+    config = llm_client.config.with_overrides(
+        models=DEFAULT_MODELS, reasoning_effort="xhigh"
+    )
     if settings is not None:
         config = config.with_settings(settings)
     response = await llm_client.generate(
@@ -146,8 +151,13 @@ async def _generate_structured_response(
 class ExplicitlyNotLeasableAccessoryTypeCriterion:
     id = "explicitly_not_leasable_type"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else EXPLICITLY_NOT_LEASABLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
@@ -161,7 +171,7 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
             self._llm_client,
             request,
             product_information,
-            EXPLICITLY_NOT_LEASABLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
             settings,
             self.id,
@@ -173,8 +183,13 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
 class ExplicitlyLeasableAccessoryTypeCriterion:
     id = "explicitly_leasable_type"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else EXPLICITLY_LEASABLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
@@ -188,7 +203,7 @@ class ExplicitlyLeasableAccessoryTypeCriterion:
             self._llm_client,
             request,
             product_information,
-            EXPLICITLY_LEASABLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
             settings,
             self.id,
@@ -254,8 +269,13 @@ class StvzoEquipmentCriterion:
 class FunctionalUnitWithBicycleCriterion:
     id = "functional_unit_with_bicycle"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
@@ -269,7 +289,7 @@ class FunctionalUnitWithBicycleCriterion:
             self._llm_client,
             request,
             product_information,
-            FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
             settings,
             self.id,
@@ -308,8 +328,11 @@ class PermanentlyMountedCriterion:
 class SpecialRulesCriterion:
     id = "special_rules"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md" if is_bawu else SPECIAL_RULES_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
@@ -323,7 +346,7 @@ class SpecialRulesCriterion:
             self._llm_client,
             request,
             product_information,
-            SPECIAL_RULES_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
             settings,
             self.id,

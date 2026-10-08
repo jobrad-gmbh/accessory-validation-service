@@ -83,10 +83,6 @@ def criteria_with_answers(monkeypatch, answers, calls, default=NO):
         strategies.StvzoEquipmentCriterion,
         strategies.FunctionalUnitWithBicycleCriterion,
         strategies.PermanentlyMountedCriterion,
-        strategies.BawuExplicitlyLeasableAccessoryTypeCriterion,
-        strategies.BawuExplicitlyNotLeasableAccessoryTypeCriterion,
-        strategies.BawuFunctionalUnitWithBicycleCriterion,
-        strategies.BawuSpecialRulesCriterion,
     ):
         monkeypatch.setattr(criterion, "evaluate", evaluate)
 
@@ -458,11 +454,10 @@ def test_special_rules_use_single_eligibility_answer(is_bawu, answer):
         }
     )
 
-    criterion_class = (
-        strategies.BawuSpecialRulesCriterion if is_bawu else criteria.SpecialRulesCriterion
-    )
     result = asyncio.run(
-        criterion_class(client).evaluate(request(is_bawu), PRODUCT_INFORMATION)
+        criteria.SpecialRulesCriterion(client, is_bawu=is_bawu).evaluate(
+            request(is_bawu), PRODUCT_INFORMATION
+        )
     )
 
     assert result == CriterionResult(answer, "Special-rule reason.", "special_rules")
@@ -488,11 +483,11 @@ def test_special_rules_receive_submitted_euro_price(is_bawu, price):
     submitted = replace(submitted, product=replace(
         submitted.product, price=Decimal(price) if price is not None else None
     ))
-    criterion_class = (
-        strategies.BawuSpecialRulesCriterion if is_bawu else criteria.SpecialRulesCriterion
+    asyncio.run(
+        criteria.SpecialRulesCriterion(client, is_bawu=is_bawu).evaluate(
+            submitted, PRODUCT_INFORMATION
+        )
     )
-
-    asyncio.run(criterion_class(client).evaluate(submitted, PRODUCT_INFORMATION))
 
     spec = client.generate.await_args.args[0]
     assert json.loads(spec.prompt)["price_eur"] == price

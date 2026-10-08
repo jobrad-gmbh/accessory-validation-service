@@ -10,6 +10,7 @@ from app.domain.validations.accessories.leasability.criteria import (
 )
 from app.domain.validations.accessories.leasability.strategies import (
     bawu_leasability_strategy,
+    leasability_strategy,
     standard_leasability_strategy,
 )
 from app.domain.validations.accessories.leasability.validation import (
@@ -26,6 +27,7 @@ __all__ = [
     "SpecialRulesCriterion",
     "StvzoEquipmentCriterion",
     "TechnicalBicycleComponentCriterion",
+    "leasability_strategy",
     "standard_leasability_strategy",
     "bawu_leasability_strategy",
 ]
