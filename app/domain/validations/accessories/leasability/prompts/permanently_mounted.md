@@ -25,16 +25,20 @@ a practical function from permanent attachment alone.
 # Authoritative positive examples
 
 - Fixed rack
-- Integrated tracker
-- Permanently installed GPS anti-theft system
-- Permanently mounted cargo box
+- GPS anti-theft protection installed inside the frame; for pedelecs,
+  directly connected to the motor or CPU
+- Permanently mounted box, crate, or container confirmed as part of the
+  manufacturer's standard configuration of the intended bicycle
+- Permanently mounted cargo box, crate, or container custom-built specifically
+  for the intended cargo bike and designed for it in size and other respects
 - Fixed adapter
 - Fixed holder system
 
 # Authoritative negative examples
 
 - AirTag
-- Portable GPS tracker
+- Loose or externally mounted GPS trackers, such as Apple AirTags; pedelec
+  trackers without a direct connection to the motor or CPU
 - Smartphone
 - Action camera
 - Loose USB tracker
@@ -43,6 +47,8 @@ a practical function from permanent attachment alone.
 - Loose pump without a frame mount
 - Cushion
 - Merely decorative accessories, even when permanently mounted
+- Additional boxes, crates, or containers with neither confirmed exception below,
+  even when permanently mounted
 
 # Evaluation rules
 
@@ -77,6 +83,18 @@ a practical function from permanent attachment alone.
 
 6. Answer `UNKNOWN` only when the submitted information is contradictory or too
    ambiguous to determine which product or installation claim is being evaluated.
+
+7. Boxes, crates, and containers are treated like excluded bags or baskets
+   unless confirmed attached as part of the manufacturer's standard configuration
+   of the intended bicycle, rather than added as an additional accessory, or
+   custom-built specifically for the intended cargo bike, permanently attached,
+   and designed for it in size and other respects. Matching dimensions, a
+   compatible-model claim, manufacturer branding, or dealer installation alone
+   establishes neither exception. A general-purpose Euro container merely fitting
+   a rack or loading platform does not qualify. For a known box or container with
+   neither exception confirmed, answer `NO` even when fixed and functional; the
+   generic mounting approval does not override this rule. These exceptions do
+   not create an approval for bags or baskets.
 
 # Answer details
 

@@ -463,6 +463,35 @@ def test_special_rules_use_leasability_result(answer, leasable):
     assert set(schema["properties"]) == {"answer", "leasable", "details"}
 
 
+@pytest.mark.parametrize("is_bawu", [False, True])
+@pytest.mark.parametrize("price", ["0", "29.00", "49.00", "150.00", None])
+def test_special_rules_receive_submitted_euro_price(is_bawu, price):
+    from dataclasses import replace
+    from decimal import Decimal
+
+    client = AsyncMock()
+    client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("test",))
+    client.generate.return_value.text = json.dumps({
+        "answer": "NO", "leasable": "UNKNOWN", "details": "No special rule matched."
+    })
+    submitted = request(is_bawu)
+    submitted = replace(submitted, product=replace(
+        submitted.product, price=Decimal(price) if price is not None else None
+    ))
+    criterion_class = (
+        strategies.BawuSpecialRulesCriterion if is_bawu else criteria.SpecialRulesCriterion
+    )
+
+    asyncio.run(criterion_class(client).evaluate(submitted, PRODUCT_INFORMATION))
+
+    spec = client.generate.await_args.args[0]
+    assert json.loads(spec.prompt)["price_eur"] == price
+    assert "submitted `price_eur`" in spec.instructions
+    assert "150 EUR" in spec.instructions
+    assert "49 EUR" in spec.instructions
+    assert "29 EUR" in spec.instructions
+
+
 @pytest.mark.parametrize(
     "answer,leasable",
     [

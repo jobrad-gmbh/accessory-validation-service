@@ -105,6 +105,7 @@ def _product_prompt(
         {
             "brand": product.brand,
             "model": product.model,
+            "price_eur": str(product.price) if product.price is not None else None,
             "product_information": {
                 "summary": product_information.summary,
                 "sources": [

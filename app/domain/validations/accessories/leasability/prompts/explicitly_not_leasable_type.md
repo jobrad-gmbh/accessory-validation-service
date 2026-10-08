@@ -13,11 +13,18 @@ whether the product is leasable.
 
 # Explicitly not-leasable accessory types
 
+- Conversion kits that add electric-assist propulsion to a bicycle, including
+  motor retrofit kits
+- Major bicycle conversion systems that materially change the bicycle's original
+  structural configuration, geometry, or wheel arrangement by replacing a core
+  assembly, including conversion modules replacing the original front-wheel setup
 - Bags of any kind, including bicycle bags, panniers, cargo-bike bags, and bags
   made for a specific bike model
 - Smartphone cases or bags (their conditional approval is assessed by the
   smartphone-mount special rule)
 - Bicycle baskets
+- Additional storage boxes, crates, and containers unless one of the confirmed
+  exceptions in the matching rules below applies
 - Covers, capes, or cages/enclosures intended to protect parked or stored bicycles,
   including cargo bikes
 - Ground and wall anchors for bicycle locks (Bodenanker, Wandanker)
@@ -25,7 +32,8 @@ whether the product is leasable.
 - Bicycle trailers and sidecars
 - Helmets
 - Dog baskets
-- Loose GPS trackers, such as Apple AirTags
+- Loose or externally mounted GPS trackers, such as Apple AirTags; pedelec
+  trackers without a direct connection to the motor or CPU
 - Clothing, glasses, or shoes
 - Gloves
 - Backpacks
@@ -66,6 +74,31 @@ whether the product is leasable.
    remains a basket even if called a "carrier", bike-mounted, or model-specific.
    A rack supplied with a basket matches the basket exclusion too; assess the
    whole product sold, even when the basket can be removed.
+
+6. Distinguish major conversions from ordinary component upgrades. An AddBike-type
+   system confirmed to replace the original front-wheel setup with a conversion
+   assembly matches the conversion exclusion, even if described as an adapter
+   or permanently installed. A compatible wheelset, brake, handlebar, or pedal
+   upgrade does not match this exclusion merely because it replaces an original
+   component. Assess the actual configuration change, not the brand name alone.
+   If the information cannot distinguish a conversion from an ordinary adapter
+   or upgrade, answer `UNKNOWN`. Do not invent a manufacturer's warranty terms
+   or assert that the warranty is void; matching this exclusion depends on the
+   conversion itself.
+
+7. Treat additional boxes, crates, and containers like excluded bags or
+   baskets. A box, crate, or container does not match this exclusion only when
+   confirmed attached as part of the manufacturer's standard configuration of
+   the intended bicycle, rather than added as an additional accessory, or when
+   custom-built specifically for the intended cargo bike, permanently attached
+   to it, and designed for it in size and other respects. Other additional
+   containers match this exclusion even when fixed or sold with a rack or adapter.
+   A general-purpose Euro container merely fitting a rack or loading platform
+   does not qualify. Matching dimensions, a compatible-model claim, manufacturer
+   branding, or dealer installation alone establishes neither exception. For a
+   known box or container with neither exception confirmed, answer `YES`; use
+   `UNKNOWN` only when the product type itself cannot be established. These
+   exceptions do not create a new approval for bags or baskets.
 
 # Answer mapping
 

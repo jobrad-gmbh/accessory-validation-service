@@ -44,12 +44,22 @@ as a dependent fixed bicycle installation:
 - FollowMe system
 - Dog bar
 - Installed brake upgrade
-- Permanently installed GPS anti-theft system
+- GPS anti-theft protection installed inside the frame; for pedelecs,
+  directly connected to the motor or CPU
+- Frame lock sold alone, subject to the minimum price of 49 EUR
 
 # Authoritative negative examples
 
-- Bicycle locks of every type, including frame locks and integrated or keyed-alike
-  lock systems, even when permanently installed
+- Loose or externally mounted GPS trackers, such as Apple AirTags; pedelec
+  trackers without a direct connection to the motor or CPU
+
+- Land BW exclusions: battery-powered lighting (Akku-Beleuchtung), display-
+  upgrade mounts, gearing components (hub gears, gearing groupset upgrades,
+  shifters, electronic and mechanical shift cables, rear and front derailleurs,
+  bottom bracket gearboxes), U-locks, folding locks, cable locks, chain locks,
+  plug-in chains, frame-lock-and-chain sets, and lock mounts, even when fixed
+- Other integrated or combined keyed-alike bicycle lock systems; a frame lock
+  sold alone is the specific exception and is not excluded here
 
 Answer `NO` when the submitted product matches one of the following categories:
 
@@ -58,6 +68,8 @@ Answer `NO` when the submitted product matches one of the following categories:
   anchor itself a lock or a functional unit with the bicycle.
 - Loose locks, independent accessories, and detachable items carried by a fixed
   holder: a shared function does not make the submitted item a fixed installation.
+- Additional boxes, crates, or containers with neither of the confirmed
+  exceptions below, even when fixed to the bicycle or supplied with a rack
 - Bicycle tow ropes: towing another bicycle does not make a rope an eligible
   tandem bar or coupling system.
 
@@ -79,6 +91,25 @@ Answer `NO` when the submitted product matches one of the following categories:
   items placed inside, even if its sides are sparse bars with large gaps.
   A basket or rack supplied with a basket does not match the rack examples merely
   because it is bike-mounted or called a "carrier". Assess the whole product sold.
+- A frame lock (Rahmenschloss) sold alone is distinct from a frame lock supplied
+  with a plug-in chain. Its approved type does not approve the excluded set.
+- The Land BW exclusions stated above cannot qualify through a generic functional-unit
+  argument. An approved integrated e-bike display or general electronic-accessory
+  holder does not approve the specifically excluded display-upgrade mount.
+
+- Boxes, crates, and containers are treated like excluded bags or baskets
+  unless confirmed attached as part of the manufacturer's standard configuration
+  of the intended bicycle, rather than added as an additional accessory, or
+  custom-built specifically for the intended cargo bike, permanently attached,
+  and designed for it in size and other respects. Matching dimensions, a
+  compatible-model claim, manufacturer branding, or dealer installation alone
+  establishes neither exception. A general-purpose Euro container merely fitting
+  a rack or loading platform does not qualify. For a known box or container with
+  neither exception confirmed, answer `NO` even if it performs a useful cargo
+  function. Do not classify it as a rack, adapter, or cargo module to bypass this
+  rule. These exceptions do not create an approval for bags or baskets.
+  Land BW also requires the container itself to be a dependent fixed
+  installation; the cargo-bike exception does not waive that requirement.
 
 # Evaluation rules
 

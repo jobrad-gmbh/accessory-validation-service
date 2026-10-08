@@ -55,8 +55,17 @@ def test_bawu_retains_criterion_contract_and_prompt_structure(standard_class, bw
     assert "Land BW 2.0" in bw_text
 
 
-@pytest.mark.parametrize("lock", ["Frame lock", "Folding lock", "Chain lock", "U-lock", "ABUS One Key Solution"])
-def test_bawu_lock_exclusion_stops_before_approval_fallbacks(lock):
+@pytest.mark.parametrize("accessory,policy_text", [
+    ("Folding lock", "folding locks"),
+    ("Chain lock", "chain locks"),
+    ("U-lock", "u-locks"),
+    ("Frame lock with plug-in chain", "frame-lock-and"),
+    ("Battery light", "battery-powered lighting"),
+    ("Display upgrade mount", "display-upgrade mounts"),
+    ("Hub gears", "hub gears"),
+    ("Bicycle lock mount", "lock mounts"),
+])
+def test_bawu_lfz_exclusion_stops_before_approval_fallbacks(accessory, policy_text):
     from dataclasses import replace
     from app.domain.validations.accessories.leasability.strategies import bawu_leasability_strategy
     from app.domain.validation_results import ValidationStatus
@@ -64,14 +73,49 @@ def test_bawu_lock_exclusion_stops_before_approval_fallbacks(lock):
     client = AsyncMock()
     client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("test",))
     client.generate.side_effect = [
-        type("Response", (), {"text": json.dumps({"answer": "YES", "details": "All lock types are excluded for BW."})})(),
-        type("Response", (), {"text": json.dumps({"answer": "YES", "leasable": "NO", "details": "Locks are excluded even when fixed."})})(),
+        type("Response", (), {"text": json.dumps({"answer": "YES", "details": "The LFZ Land BW column excludes this type."})})(),
+        type("Response", (), {"text": json.dumps({"answer": "YES", "leasable": "NO", "details": "The LFZ exclusion applies even when fixed."})})(),
     ]
     submitted = request(True)
-    submitted = replace(submitted, product=replace(submitted.product, model=lock))
+    submitted = replace(submitted, product=replace(submitted.product, model=accessory))
     result = asyncio.run(bawu_leasability_strategy(submitted, client, PRODUCT_INFORMATION))
     assert result.status is ValidationStatus.REJECTED
     assert [r.criterion_id for r in result.criterion_results] == ["explicitly_not_leasable_type", "special_rules"]
     assert client.generate.await_count == 2
     for call in client.generate.await_args_list:
-        assert "locks of every type" in call.args[0].instructions
+        assert policy_text in call.args[0].instructions.lower()
+        assert "locks of every type" not in call.args[0].instructions
+
+
+def test_bawu_standalone_frame_lock_can_use_the_lfz_exception():
+    from dataclasses import replace
+    from decimal import Decimal
+    from app.domain.validations.accessories.leasability.strategies import bawu_leasability_strategy
+    from app.domain.validation_results import ValidationStatus
+
+    client = AsyncMock()
+    client.config = LiteLLMConfig(base_url="https://gateway.example/v1", models=("test",))
+    responses = [
+        {"answer": "NO", "details": "A standalone frame lock is not an excluded lock type."},
+        {"answer": "YES", "details": "A fixed frame lock matches the LFZ exception."},
+        {"answer": "YES", "leasable": "YES", "details": "The fixed frame lock costs 49 EUR."},
+    ]
+    client.generate.side_effect = [
+        type("Response", (), {"text": json.dumps(response)})()
+        for response in responses
+    ]
+    submitted = request(True)
+    submitted = replace(submitted, product=replace(
+        submitted.product, model="Frame lock sold alone", price=Decimal("49.00")
+    ))
+    result = asyncio.run(bawu_leasability_strategy(submitted, client, PRODUCT_INFORMATION))
+
+    assert result.status is ValidationStatus.PASSED
+    assert [r.criterion_id for r in result.criterion_results] == [
+        "explicitly_not_leasable_type", "explicitly_leasable_type", "special_rules"
+    ]
+    for call in client.generate.await_args_list:
+        spec = call.args[0]
+        assert "frame lock sold alone" in spec.instructions.lower()
+        assert "locks of every type" not in spec.instructions
+        assert json.loads(spec.prompt)["price_eur"] == "49.00"
