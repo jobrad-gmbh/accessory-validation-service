@@ -53,7 +53,7 @@ class ProductValidationService:
             except (ValidationConfigurationError, ValidationExecutionError):
                 raise
             except Exception as exc:
-                raise ValidationExecutionError(f"Validation {validation.id} failed", exc) from exc
+                raise ValidationExecutionError(validation.id, exc) from exc
             executions.append(execution)
 
         if any(

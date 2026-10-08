@@ -1,11 +1,11 @@
 import json
-from typing import Any, Mapping, Sequence
+from decimal import Decimal
 
 import pytest
 from pydantic import HttpUrl
 
 from app.adapters.llm import (
-    ChatConfig,
+    LLMRequestSpec,
     LLMResponse,
     LLMSource,
     LiteLLMConfig,
@@ -30,44 +30,30 @@ class FakeLLMClient:
         )
         self.response = response
         self.error = error
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[LLMRequestSpec] = []
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: ChatConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse:
-        self.calls.append(
-            {
-                "prompt": prompt,
-                "instructions": instructions,
-                "config": config,
-                "tools": tools,
-                "tool_choice": tool_choice,
-            }
-        )
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse:
+        self.calls.append(request)
         if self.error is not None:
             raise self.error
         assert self.response is not None
         return self.response
 
 
-def product() -> ProductInput:
+def product(price: Decimal | None = None) -> ProductInput:
     return ProductInput(
         product_type=ProductType.ACCESSORY,
         brand="Ortlieb",
         model="Quick Rack",
         category="rear rack",
         year=2025,
+        price=price,
     )
 
 
 @pytest.mark.asyncio
-async def test_retrieves_condensed_information_with_required_web_search():
+@pytest.mark.parametrize("price", [None, Decimal("0"), Decimal("49.99")])
+async def test_retrieves_condensed_information_with_required_web_search(price):
     source = LLMSource("https://manufacturer.example/rack", "Quick Rack")
     client = FakeLLMClient(
         LLMResponse(
@@ -79,28 +65,25 @@ async def test_retrieves_condensed_information_with_required_web_search():
         )
     )
 
-    result = await AccessoryProductInformationService(client).retrieve(product())
+    result = await AccessoryProductInformationService(client).retrieve(product(price))
 
     assert result.summary == "A removable rear bicycle rack."
     assert result.used_web_search is True
     assert result.sources == (source,)
     call = client.calls[0]
-    assert call["tools"] == (
-        {
-            "type": "web_search",
-            "parameters": {"engine": "auto", "max_results": 5},
-        },
-    )
-    assert call["tool_choice"] == "required"
-    assert json.loads(str(call["prompt"])) == {
+    assert call.tools == ({"type": "web_search"},)
+    assert call.tool_choice == "required"
+    assert call.description == "product_information"
+    assert json.loads(call.prompt) == {
         "brand": "Ortlieb",
         "model": "Quick Rack",
+        "price": str(price) if price is not None else None,
         "category": "rear rack",
         "year": 2025,
         "size": None,
         "color": None,
     }
-    assert "Do not make a leasing decision" in str(call["instructions"])
+    assert "Do not make a leasing decision" in call.instructions
 
 
 @pytest.mark.asyncio
@@ -114,8 +97,8 @@ async def test_search_can_be_disabled_for_models_without_that_capability():
     )
 
     assert result.used_web_search is False
-    assert client.calls[0]["tools"] == ()
-    assert client.calls[0]["tool_choice"] is None
+    assert client.calls[0].tools == ()
+    assert client.calls[0].tool_choice is None
 
 
 @pytest.mark.asyncio
@@ -128,6 +111,7 @@ async def test_unsupported_search_model_has_actionable_domain_error():
         await AccessoryProductInformationService(client).retrieve(product())
 
     assert error.value.model == "local-model"
+    assert isinstance(error.value.__cause__, UnsupportedLLMToolError)
     assert "Choose a web-search-capable model or disable web search" in str(
         error.value
     )

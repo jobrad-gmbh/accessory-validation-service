@@ -1,5 +1,15 @@
-from app.adapters.llm.client import LLMClient, LLMResponse, LLMSource
-from app.adapters.llm.config import ChatConfig, LLMConfig
+from app.adapters.llm.client import (
+    LLMClient,
+    LLMRequestSpec,
+    LLMResponse,
+    LLMSource,
+    LLMUsage,
+)
+from app.adapters.llm.config import (
+    LLMClientConfig,
+    LLMConnectionSettings,
+    LLMModelSettings,
+)
 from app.adapters.llm.jev import (
     ChoiceQuestion,
     JevClient,
@@ -15,6 +25,7 @@ from app.adapters.llm.errors import (
     LLMTimeoutError,
     ModelsNotFoundError,
     UnsupportedLLMToolError,
+    summarize_validation_error,
 )
 from app.adapters.llm.litellm import LiteLLMClient, LiteLLMConfig
 from app.adapters.llm.recording import (
@@ -23,7 +34,8 @@ from app.adapters.llm.recording import (
 )
 
 __all__ = [
-    "ChatConfig",
+    "LLMConnectionSettings",
+    "LLMModelSettings",
     "JevConfig",
     "JevClient",
     "JevRequest",
@@ -33,10 +45,12 @@ __all__ = [
     "ScoreQuestion",
     "LLMRequest",
     "LLMClient",
-    "LLMConfig",
+    "LLMClientConfig",
     "LLMError",
+    "LLMRequestSpec",
     "LLMResponse",
     "LLMSource",
+    "LLMUsage",
     "LLMResponseError",
     "LLMTimeoutError",
     "LiteLLMClient",
@@ -44,4 +58,5 @@ __all__ = [
     "ModelsNotFoundError",
     "RecordingLLMClient",
     "UnsupportedLLMToolError",
+    "summarize_validation_error",
 ]

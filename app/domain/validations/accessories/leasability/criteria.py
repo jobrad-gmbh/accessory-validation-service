@@ -1,12 +1,18 @@
 import json
 import re
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.adapters.llm import ChatConfig, LLMClient
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.adapters.llm import (
+    LLMClient,
+    LLMModelSettings,
+    LLMRequestSpec,
+    LLMResponseError,
+    summarize_validation_error,
+)
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.validation import (
     ValidationRequest,
 )
@@ -14,7 +20,17 @@ from app.domain.validations.accessories.product_information import (
     AccessoryProductInformation,
 )
 
-DEFAULT_MODELS = ("glm-5.3", "gpt-6-luna")
+DEFAULT_MODELS = ("gpt-6-luna", "glm-5.3")
+
+LeasabilityCriterionId = Literal[
+    "explicitly_not_leasable_type",
+    "explicitly_leasable_type",
+    "technical_bicycle_component",
+    "stvzo_equipment",
+    "functional_unit_with_bicycle",
+    "permanently_mounted",
+    "special_rules",
+]
 
 EXPLICITLY_NOT_LEASABLE_PROMPT_PATH = (
     Path(__file__).with_name("prompts") / "explicitly_not_leasable_type.md"
@@ -39,6 +55,7 @@ PERMANENTLY_MOUNTED_PROMPT_PATH = (
 )
 
 SPECIAL_RULES_PROMPT_PATH = Path(__file__).with_name("prompts") / "special_rules.md"
+BAWU_PROMPTS = Path(__file__).with_name("prompts") / "bawu"
 
 
 class _CriterionResponse(BaseModel):
@@ -48,26 +65,11 @@ class _CriterionResponse(BaseModel):
     details: str = Field(min_length=1)
 
 
-class _SpecialRulesResponse(_CriterionResponse):
-    leasable: CriterionAnswer
-
-    @model_validator(mode="after")
-    def validate_leasable_matches_answer(self) -> "_SpecialRulesResponse":
-        if self.answer is CriterionAnswer.YES:
-            if self.leasable is CriterionAnswer.UNKNOWN:
-                raise ValueError(
-                    "leasable must be YES or NO when a special rule matches"
-                )
-        elif self.leasable is not CriterionAnswer.UNKNOWN:
-            raise ValueError(
-                "leasable must be UNKNOWN when no definitive special rule matches"
-            )
-        return self
-
-
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
-_JSON_CODE_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL | re.IGNORECASE)
+_JSON_CODE_FENCE = re.compile(
+    r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL | re.IGNORECASE
+)
 
 
 def load_prompt(path: Path, response_model: type[BaseModel]) -> str:
@@ -95,6 +97,7 @@ def _product_prompt(
         {
             "brand": product.brand,
             "model": product.model,
+            "price_eur": str(product.price) if product.price is not None else None,
             "product_information": {
                 "summary": product_information.summary,
                 "sources": [
@@ -113,13 +116,24 @@ async def _generate_structured_response(
     product_information: AccessoryProductInformation,
     prompt_path: Path,
     response_model: type[ResponseModel],
-    config: ChatConfig | None,
+    settings: LLMModelSettings | None,
+    description: str | None = None,
+    validation_id: str | None = None,
 ) -> ResponseModel:
-    selected_config = config or llm_client.config.with_overrides(models=DEFAULT_MODELS)
+    config = llm_client.config.with_overrides(
+        models=DEFAULT_MODELS, reasoning_effort="xhigh"
+    )
+    if settings is not None:
+        config = config.with_settings(settings)
     response = await llm_client.generate(
-        _product_prompt(request, product_information),
-        instructions=load_prompt(prompt_path, response_model),
-        config=selected_config,
+        LLMRequestSpec(
+            prompt=_product_prompt(request, product_information),
+            instructions=load_prompt(prompt_path, response_model),
+            description=description,
+            config=config,
+            product_id=request.product.id,
+            validation_id=validation_id,
+        )
     )
     text = response.text.strip()
     fence = _JSON_CODE_FENCE.fullmatch(text)
@@ -127,30 +141,41 @@ async def _generate_structured_response(
         text = fence.group(1).strip()
     try:
         return response_model.model_validate_json(text)
-    except ValidationError:
-        raise ValueError("LLM returned an invalid criterion response") from None
+    except ValidationError as error:
+        raise LLMResponseError(
+            f"Model '{response.model}' returned an invalid criterion response"
+            f" during '{description}': {summarize_validation_error(error)}"
+        ) from error
 
 
 class ExplicitlyNotLeasableAccessoryTypeCriterion:
     id = "explicitly_not_leasable_type"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else EXPLICITLY_NOT_LEASABLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
             product_information,
-            EXPLICITLY_NOT_LEASABLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -158,23 +183,31 @@ class ExplicitlyNotLeasableAccessoryTypeCriterion:
 class ExplicitlyLeasableAccessoryTypeCriterion:
     id = "explicitly_leasable_type"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else EXPLICITLY_LEASABLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
             product_information,
-            EXPLICITLY_LEASABLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -190,7 +223,8 @@ class TechnicalBicycleComponentCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -198,7 +232,9 @@ class TechnicalBicycleComponentCriterion:
             product_information,
             TECHNICAL_BICYCLE_COMPONENT_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -214,7 +250,8 @@ class StvzoEquipmentCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -222,7 +259,9 @@ class StvzoEquipmentCriterion:
             product_information,
             STVZO_EQUIPMENT_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -230,23 +269,31 @@ class StvzoEquipmentCriterion:
 class FunctionalUnitWithBicycleCriterion:
     id = "functional_unit_with_bicycle"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md"
+            if is_bawu
+            else FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
             product_information,
-            FUNCTIONAL_UNIT_WITH_BICYCLE_PROMPT_PATH,
+            self._prompt_path,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -262,7 +309,8 @@ class PermanentlyMountedCriterion:
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
     ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
@@ -270,7 +318,9 @@ class PermanentlyMountedCriterion:
             product_information,
             PERMANENTLY_MOUNTED_PROMPT_PATH,
             _CriterionResponse,
-            config,
+            settings,
+            self.id,
+            validation_id,
         )
         return CriterionResult(result.answer, result.details, self.id)
 
@@ -278,22 +328,28 @@ class PermanentlyMountedCriterion:
 class SpecialRulesCriterion:
     id = "special_rules"
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, *, is_bawu: bool = False) -> None:
         self._llm_client = llm_client
+        self._prompt_path = (
+            BAWU_PROMPTS / f"{self.id}.md" if is_bawu else SPECIAL_RULES_PROMPT_PATH
+        )
 
     async def evaluate(
         self,
         request: ValidationRequest,
         product_information: AccessoryProductInformation,
         *,
-        config: ChatConfig | None = None,
-    ) -> SpecialRuleResult:
+        settings: LLMModelSettings | None = None,
+        validation_id: str | None = None,
+    ) -> CriterionResult:
         result = await _generate_structured_response(
             self._llm_client,
             request,
             product_information,
-            SPECIAL_RULES_PROMPT_PATH,
-            _SpecialRulesResponse,
-            config,
+            self._prompt_path,
+            _CriterionResponse,
+            settings,
+            self.id,
+            validation_id,
         )
-        return SpecialRuleResult(result.answer, result.leasable, result.details, self.id)
+        return CriterionResult(result.answer, result.details, self.id)

@@ -7,26 +7,25 @@ JSON field names, and required enum values exactly as specified.
 
 # Role
 
-You determine whether the submitted product forms a close functional unit with the
-bicycle.
+You determine whether the submitted product forms a close functional unit with
+the bicycle under Land BW 2.0. Apply the fixed-installation requirement strictly,
+without discretionary approvals.
 
 # Functional units
 
 A functional unit means the accessory and bicycle work together to provide a
-bicycle-related function that neither is intended to provide alone.
+bicycle-related function that neither is intended to provide alone. Under Land
+BW, the accessory must also be a dependent installation firmly connected to the
+bicycle frame or another bicycle part.
 A bicycle-related function supports the bicycle's use as a vehicle, such as riding,
 carrying people or cargo, parking with a bike-mounted stand, or theft protection.
 Storing, displaying, or transporting the bicycle itself is not such a function.
 
 # Authoritative positive examples
 
-Answer `YES` when the submitted product clearly matches one of these categories:
+Answer `YES` for these categories only when the submitted accessory is confirmed
+as a dependent fixed bicycle installation:
 
-- Bike lock
-- Frame lock
-- Folding lock
-- Chain lock
-- U-lock
 - Child seat
 - Frame-mounted child seat
 - Luggage rack
@@ -37,26 +36,38 @@ Answer `YES` when the submitted product clearly matches one of these categories:
 - Water bottle holder (do not include the bottle)
 - Smartphone holder
 - Computer mount
-- Adapter system fixed to the bicycle
+- Adapter system fixed to the bicycle, such as KLICKfix, MonkeyLink, Racktime
 - Trailer coupling
 - Tandem system
 - Tandem coupling
 - Tandem bar
 - FollowMe system
 - Dog bar
+- Installed brake upgrade
 - GPS anti-theft protection installed inside the frame; for pedelecs,
   directly connected to the motor or CPU
+- Frame lock sold alone, subject to the minimum price of 49 EUR
 
 # Authoritative negative examples
 
 - Loose or externally mounted GPS trackers, such as Apple AirTags; pedelec
   trackers without a direct connection to the motor or CPU
 
+- Land BW exclusions: battery-powered lighting (Akku-Beleuchtung), display-
+  upgrade mounts, gearing components (hub gears, gearing groupset upgrades,
+  shifters, electronic and mechanical shift cables, rear and front derailleurs,
+  bottom bracket gearboxes), U-locks, folding locks, cable locks, chain locks,
+  plug-in chains, frame-lock-and-chain sets, and lock mounts, even when fixed
+- Other integrated or combined keyed-alike bicycle lock systems; a frame lock
+  sold alone is the specific exception and is not excluded here
+
 Answer `NO` when the submitted product matches one of the following categories:
 
 - Ground or wall anchors for bicycle locks: they attach to the surroundings,
   not the bicycle. Connecting a bicycle lock to an anchor does not make the
   anchor itself a lock or a functional unit with the bicycle.
+- Loose locks, independent accessories, and detachable items carried by a fixed
+  holder: a shared function does not make the submitted item a fixed installation.
 - Additional boxes, crates, or containers with neither of the confirmed
   exceptions below, even when fixed to the bicycle or supplied with a rack
 - Bicycle tow ropes: towing another bicycle does not make a rope an eligible
@@ -70,7 +81,7 @@ Answer `NO` when the submitted product matches one of the following categories:
   because it can be used on a bicycle. This includes smartphones, bicycle
   computers, navigation devices, speedometers, action cameras, and other
   portable or general-purpose devices.
-- Treat bicycle-mounted holders, mounts, couplings, racks, locks, and similar
+- Treat bicycle-mounted holders, mounts, couplings, racks, and similar
   bicycle-integrated accessories as stronger positive evidence than the devices
   or objects they carry.
 - An accessory used with a bicycle rack is not itself a rack. For example, a
@@ -80,6 +91,11 @@ Answer `NO` when the submitted product matches one of the following categories:
   items placed inside, even if its sides are sparse bars with large gaps.
   A basket or rack supplied with a basket does not match the rack examples merely
   because it is bike-mounted or called a "carrier". Assess the whole product sold.
+- A frame lock (Rahmenschloss) sold alone is distinct from a frame lock supplied
+  with a plug-in chain. Its approved type does not approve the excluded set.
+- The Land BW exclusions stated above cannot qualify through a generic functional-unit
+  argument. An approved integrated e-bike display or general electronic-accessory
+  holder does not approve the specifically excluded display-upgrade mount.
 
 - Boxes, crates, and containers are treated like excluded bags or baskets
   unless confirmed attached as part of the manufacturer's standard configuration
@@ -92,6 +108,8 @@ Answer `NO` when the submitted product matches one of the following categories:
   neither exception confirmed, answer `NO` even if it performs a useful cargo
   function. Do not classify it as a rack, adapter, or cargo module to bypass this
   rule. These exceptions do not create an approval for bags or baskets.
+  Land BW also requires the container itself to be a dependent fixed
+  installation; the cargo-bike exception does not waive that requirement.
 
 # Evaluation rules
 
@@ -103,15 +121,19 @@ Answer `NO` when the submitted product matches one of the following categories:
 2. The positive and negative example lists are authoritative.
    - Recognize clear synonyms, spelling differences, and German or English
      product names and descriptions.
-   - Answer `YES` when the product clearly matches an authoritative positive example,
-     even if the broader definition might otherwise be debatable.
+   - Answer `YES` for an authoritative positive example only when dependent fixed
+     installation of the submitted item is established. The example does not
+     override the installation requirement.
    - Answer `NO` when the product matches an authoritative negative example.
 
 3. For products outside the positive examples, answer `YES` only when the
    submitted information clearly shows that the product and bicycle work
-   together as a close bicycle-related functional unit.
+   together as a close bicycle-related functional unit and the accessory is a
+   confirmed dependent fixed installation.
 
-4. Answer `NO` when the product is clearly a portable device, general-purpose
+4. Answer `NO` when dependent fixed installation is unmet or unconfirmed.
+   Compatibility, bicycle-specific design, joint leasing, and usefulness alone
+   are insufficient. Also answer `NO` for a portable device, general-purpose
    object, removable electronics unit, or something that does not work together
    with the bicycle as a close bicycle-related unit.
 

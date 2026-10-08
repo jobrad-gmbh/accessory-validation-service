@@ -13,6 +13,7 @@ from app.adapters.llm import (
     RecordingLLMClient,
 )
 from app.adapters.web.exceptions import (
+    unhandled_exception_handler,
     validation_configuration_exception_handler,
     validation_exception_handler,
     validation_execution_exception_handler,
@@ -36,6 +37,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
         application.state.validation_report_repository = PostgresValidationReportRepository(engine)
         llm_request_repository = PostgresLLMRequestRepository(engine)
         async with httpx.AsyncClient() as http_client:
+            application.state.http_client = http_client
             application.state.litellm_client = RecordingLLMClient(
                 LiteLLMClient(http_client), llm_request_repository
             )
@@ -70,6 +72,9 @@ async def execution_exception_handler(
     request: Request, exc: ValidationExecutionError
 ):
     return await validation_execution_exception_handler(request, exc)
+
+
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
 app.include_router(system_router)

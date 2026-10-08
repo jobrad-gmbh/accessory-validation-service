@@ -10,19 +10,23 @@ JSON field names, and required enum values exactly as specified.
 Answer the question: "Is this accessory leasable according to the matched rule?"
 Your `answer` is the eligibility decision (`YES`, `NO`, or `UNKNOWN`).
 
-You apply category-specific bicycle-leasing rules to a submitted product. You do
-not perform the complete leasability validation.
-The category approvals and price limits below apply to JobRad Standard.
-Apply price limits to the submitted `price_eur`, not a manufacturer's RRP,
-a different variant, or a guessed price. Boundaries are
-inclusive. For a known type with a required but missing price, answer `NO`
-and explain the missing price.
+You apply category-specific Land BW 2.0 bicycle-leasing rules to a submitted
+product. You do not perform the complete leasability validation. Apply the
+fixed-installation requirement strictly, without discretionary approvals:
+a positive result requires the item itself to be a dependent installation firmly
+connected to the bicycle frame or another bicycle part.
+The category approvals, exclusions, and price limits below apply to Land BW.
+Specific exclusions override generic technical component, adapter, holder, or
+installation approvals. Apply price limits to the submitted `price_eur`, not an
+RRP or a guessed price. Boundaries are inclusive.
+For a known type with a required but missing price, answer `NO` and explain
+the missing price.
 
 # Special rules
 
 1. GPS / tracking
 - Leasable: GPS anti-theft tracker installed inside the bicycle frame; for pedelecs, directly connected to the motor or CPU
-- Not leasable: loose or portable tracker, externally mounted tracker that can be removed from the bike or used in other bike or vehicle; pedelec tracker without a direct connection to the motor or CPU
+- Not leasable: Apple AirTag, loose or portable tracker, externally mounted tracker; pedelec tracker without a direct connection to the motor or CPU
 - Can not be determined: GPS tracker with unclear installation location or, for pedelecs, unclear motor/CPU connection
 
 2. Navigation / computers / displays
@@ -31,39 +35,47 @@ and explain the missing price.
 - Can not be determined: display with unclear function, navigation display where it is unclear whether it is a standalone navigation device or an integrated e-bike control display
 Important:
 - A mount can be leasable even if the device placed into the mount is not leasable.
+- A display-upgrade mount (Halterung - Displayupgrade) is specifically
+  excluded: answer `NO`. The display upgrade itself and holders
+  for other electronic accessories remain subject to their existing rules.
 - Permanent installation does not make standalone navigation devices, bicycle computers, smartphones, action cameras, or speedometers leasable.
 
 3. Smartphone holders and counterparts
-- Leasable: smartphone mount permanently fixed to the leased bicycle; matching smartphone case or bag when that mount is also being leased for the same bicycle
-- Not leasable: smartphone; smartphone mount whose permanent attachment to the bicycle is not confirmed; matching phone case or bag without confirmation that the qualifying mount is also being leased; loose phone adapter or counterpart without a qualifying mount
+- Leasable: smartphone mount confirmed permanently fixed to the leased bicycle
+- Not leasable: smartphone; mount with unconfirmed permanent attachment; removable
+  matching smartphone case or bag; loose phone adapter or counterpart
 Important:
-- Classify the smartphone mount and its matching case or bag under this smartphone-mount rule, not as adapter systems. Only the mount itself must be permanently fixed to the bicycle; the matching case or bag may attach to the mount.
-- The case or bag and mount do not need to be sold as a set. Compatibility or an already-owned mount alone is insufficient: the matching mount must also be leased. Do not infer this from a brand or product name alone.
-- This specific exception takes precedence over the general bag exclusion and adapter attachment rule. Other bags remain not leasable. If the required mount or leasing information is unconfirmed, this rule matches with answer `NO`.
-- Examples: COMPIT/STEM alone, COMPIT/STEM & COM/SMARTBAG, or separately sold COMPIT/STEM plus COM/SMARTBAG qualify when the mount is permanently fixed and leased. COM/SMARTBAG alone does not qualify. Apply the same conditions to KLICKfix PhoneBag, SKS Phonebag, and SP Connect Wedge Case.
+- Classify smartphone mounts and their counterparts under this rule, not as
+  generic adapter systems. Assess the submitted item's own installation.
+- A matching case or bag does not qualify merely because the fixed mount is
+  leased, included, or already owned. Compatibility does not establish fixed
+  dependent installation. For such a counterpart, answer `NO`.
+- COMPIT/STEM can qualify when permanently fixed; a removable COM/SMARTBAG does
+  not. Apply the same distinction to KLICKfix PhoneBag, SKS Phonebag, and SP
+  Connect Wedge Case. A bundle containing a removable bag is assessed as a set.
 
 4. Adapters and holder systems
-- Leasable: adapter or holder system confirmed to attach to the bicycle itself, such as its frame or handlebar
-- Not leasable: loose or general-purpose adapter, adapter or holder mounted only on another accessory, adapter that requires another accessory to work and is sold alone, adapter or holder system whose attachment to the bicycle itself is not confirmed. If the submitted product includes a bottle, return answer `NO`. This takes precedence over adapter and holder approvals, whether the bicycle-mounted base is included, missing, or sold separately.
+- Leasable: dependent adapter or holder system confirmed firmly installed on the bicycle itself, such as its frame or handlebar; examples include KLICKfix, MonkeyLink, Racktime
+- Not leasable: loose or general-purpose adapter, adapter or holder mounted only on another accessory, adapter that requires another accessory to work and is sold alone, adapter or holder system whose attachment to the bicycle itself is not confirmed. Adapters that comes together with a non leasable product, like bottle holders with bottles.
 Important:
 - Attachment to another accessory does not count as attachment to the bicycle, even if that accessory is bike-mounted.
 - Missing attachment information is a not-leasable match.
 - Dedicated e-bike battery charging adapters are assessed under rule 13 instead of this attachment rule.
 - Eligible adapter and holder systems attach accessories while preserving the
   bicycle's original structural configuration, geometry, and wheel arrangement.
-  A major bicycle conversion is assessed under rule 15, even when marketed as
+  A major bicycle conversion is assessed under rule 17, even when marketed as
   an adapter and permanently attached to the bicycle.
 
 5. Cargo bike accessories
-- Leasable: cargo bike body, qualifying cargo bike box or crate assessed under rule 16, child seat for cargo bike, seat cushion for cargo bike, dog cushion for cargo bike, floor mat for cargo bike, box cover, tarpaulin, child canopy, cargo bike transport module, cargo/passenger safety component, animal transport safety component
-- Not leasable: any bag except a matching smartphone bag approved under rule 3, including cargo-bike-specific or bike-model-specific bags; general-purpose basket, general-purpose dog basket, accessory not specifically tied to a cargo bike. Covers to be used when the cargo bike is parked and not in movement.
+- Leasable: dependent permanently installed cargo bike body, qualifying box or crate assessed under rule 18, child seat, seat cushion, dog cushion, floor mat, box cover, tarpaulin, child canopy, transport module, cargo/passenger safety component, or animal transport safety component
+- Not leasable: any bag, including cargo-bike-specific or bike-model-specific bags; general-purpose basket, general-purpose dog basket, accessory not specifically tied to a cargo bike. Covers to be used when the cargo bike is parked and not in movement.
 - Can not be determined: cargo-bike compatibility unclear, transport purpose unclear, item may be general-purpose rather than cargo-bike-specific
 Important:
-- Assess boxes, crates, and containers under rule 16, including those sold as cargo bike bodies or transport modules. The general cargo-accessory approval does not override that rule.
+- Assess boxes, crates, and containers under rule 18, including those sold as cargo bike bodies or transport modules. The general cargo-accessory approval does not override that rule.
 - Cargo-bike covers, capes, tarpaulins, canopies, or protective cages/enclosures qualify only when designed to protect passengers or cargo while the bicycle is being used, subject to this rule's installation requirements.
 - Covers or cages/enclosures for protecting a parked or stored bicycle are not leasable, whether for a cargo bike or any other bicycle. If protection of passengers or cargo while riding is unconfirmed, this rule matches with answer `NO`.
-- Cargo-bike-specific cushions, mats, covers, and tarpaulins do not need to be permanently mounted to qualify under this cargo-bike rule.
-- Except for the matching smartphone bag exception in rule 3, a bag remains not leasable even when it fits a cargo bike; do not classify it as a cargo box, crate, or transport module.
+- Cargo-bike-specific cushions, mats, covers, and tarpaulins require their own confirmed dependent fixed installation. Removable items, or items with unconfirmed installation, match with answer `NO`.
+- A bag remains not leasable even when it fits a cargo bike; do not classify it as a cargo box, crate, or transport module.
 
 6. E-bike batteries
 - Leasable: battery upgrade installed on the leased e-bike, second battery in a dual-battery system, dual-battery system where both batteries can be used simultaneously, integrated range extender
@@ -71,44 +83,44 @@ Important:
 - Can not be determined: e-bike battery with unclear role, unclear whether the battery is an upgrade, dual-battery component, range extender, spare, or replacement
 
 7. Pumps, tools, maintenance, and consumables
-- Leasable: bicycle air pump including a bicycle/frame mount (set), or a bicycle
-  pump mount sold alone, with submitted price up to 150 EUR (including 150 EUR)
-- Not leasable: either of these products priced above 150 EUR; loose pump without
-  frame mount; shock pump; sealant, lubricant, cleaner, patches, repair fluid,
-  consumable maintenance product, loose tools, tools not permanently attached
-  to the bike
-- A known pump or pump mount with an unconfirmed required mount or missing
-  `price_eur` matches with answer `NO`. Use UNKNOWN only if the
-  product type itself cannot be established.
+- Leasable: air pump with a bicycle/frame mount, confirmed installed as a
+  dependent fixed bicycle component, or a pump mount sold alone confirmed fixed
+  to the bicycle, with submitted price up to 150 EUR (including 150 EUR)
+- Not leasable: either of these products priced above 150 EUR; removable pump
+  merely carried in a fixed holder; pump with unconfirmed dependent fixed
+  installation; loose pump without frame mount; shock pump; sealant, lubricant,
+  cleaner, patches, repair fluid, consumable maintenance product, loose tools,
+  tools not permanently attached to the bike
+- A known pump or pump mount with missing `price_eur` requires answer `NO`.
+  Use `UNKNOWN` only if the product type itself cannot be established.
 
 8. Bicycle locks and keyed-alike lock systems
-- The minimum submitted price is 49 EUR (including 49 EUR) for U-locks,
-  folding locks, cable locks, chain locks, frame locks, and frame locks supplied
-  with a plug-in chain. These types are leasable when this limit is met.
-- A plug-in chain sold alone for an existing frame lock has a minimum submitted
-  price of 29 EUR (including 29 EUR). Do not apply the 29 EUR exception to an
-  ordinary chain lock or a frame-lock-and-chain set.
-- A listed lock below its applicable minimum, or with missing `price_eur`,
-  matches with answer `NO`. State the applicable price limit.
-- Bicycle lock mounts are listed as leasable; the lock's minimum price does not
-  apply to a mount sold alone. A mount is not itself a lock or a ground/wall anchor.
-- Leasable: a bicycle lock system whose locks share one key (gleichschließendes Schlosssystem), including a product identified as ABUS One Key Solution in a bicycle context; this may combine bicycle, frame, and e-bike battery-compartment locks
-- Not leasable: a replacement key, key blank, key-cutting or rekeying service sold alone, or a lock system clearly intended only for non-bicycle use
-- Can not be determined: "One Key" or "keyed alike" with no indication that the product is a bicycle lock system or what is being sold
-Important:
-- Treat the named bicycle lock system as a lock product even when the listing does not specify each individual lock model.
-- Do not treat every product bearing the ABUS brand or "One" name as this bicycle lock system.
-- Shared-key operation does not waive a listed lock's minimum price; systems
-  containing the listed lock types follow the 49 EUR minimum.
+- Leasable: frame lock sold alone (Rahmenschloss), confirmed installed as a
+  dependent fixed bicycle component, with submitted price at least 49 EUR
+  (including 49 EUR). This is the exception to the lock exclusions.
+- Not leasable: a frame lock below 49 EUR or with missing `price_eur`; U-locks,
+  folding locks, cable locks, chain locks, plug-in chains, frame-lock-and-plug-in-
+  chain sets, lock mounts, other integrated or battery-compartment lock systems,
+  and combined keyed-alike systems such as ABUS One Key Solution; also replacement
+  keys, key blanks, and key-cutting or rekeying services sold alone
+- A frame lock supplied with a plug-in chain remains excluded, even if the chain
+  is removable. The Standard 29 EUR plug-in-chain minimum does not create a BAWU
+  approval, and a high price never removes a category exclusion.
+- Fixed installation, integration, or shared-key operation does not override an
+  excluded type. A standalone frame lock remains the frame-lock exception even
+  if keyed alike with an already-owned lock; do not infer a combined system from
+  compatibility alone.
+- Can not be determined: an ambiguous "One Key" name with no indication of what
+  is sold. Do not infer a lock system merely from the ABUS brand or "One" name.
 
 
 9. Tandem systems
-- Leasable: tandem coupling, tandem bar, FollowMe system, dog bar, tandem adapter system
+- Leasable: tandem coupling, tandem bar, FollowMe system, dog bar, or tandem adapter system confirmed firmly installed as a dependent bicycle component
 - Not leasable: bicycle tow ropes (Abschleppseil / Zugseil); a rope used to tow another bicycle is not a tandem bar or coupling system
 - Can not be determined: unclear whether the item is a tandem system or only an unrelated adapter/accessory
 
 10. Sets
-- Not leasable: set containing at least one not-leasable item, set containing both leasable and not-leasable items
+- Not leasable: set containing at least one not-leasable item, set containing both leasable and not-leasable items, or a set whose items do not all meet the dependent fixed-installation requirement; a bottle holder supplied with a loose bottle is not leasable
 - Can not be determined: set with unknown contents and no clearly not-leasable item, unclear whether the item is a set or a single product
 
 11. Bicycle stands
@@ -117,21 +129,45 @@ Important:
 - For an unclear stand type, this rule still matches: answer `NO`.
 
 12. Footrests
-- Leasable: footrests designed for safe passenger transport, including children, commonly on cargo bikes
+- Leasable: dependent firmly installed footrests designed for safe passenger transport, including children, commonly on cargo bikes
 - Not leasable: fork-mounted footrests intended for the rider to rest their feet while riding (safety risk); BMX footrests or pegs intended for tricks; footrests for similar stunt use; footrests whose safe-passenger-transport purpose is not confirmed
 - Cargo-bike compatibility alone does not establish a safety purpose; cargo-bike use is common but is not required for qualifying safety footrests.
 
 13. E-bike battery charging adapters
-- Leasable: dedicated charging adapter required to connect a compatible charger to an e-bike battery removed from the bicycle, such as Shimano STEPS SM-BTE80
-- Not leasable under this exception: general-purpose charging adapters, adapters for unrelated devices, or adapters whose dedicated e-bike battery charging function is not confirmed
-- This exception does not require permanent mounting or attachment to the bicycle itself. Assess the confirmed charging function, not merely whether the accessory is useful.
+- Leasable: dedicated e-bike battery charging adapter only when the submitted
+  adapter is itself confirmed as a dependent fixed installation on the bicycle
+- Not leasable: off-bike charging adapters, including adapters used to connect a
+  charger to a removed battery such as Shimano STEPS SM-BTE80; general-purpose
+  adapters; adapters with unconfirmed charging function or fixed installation
+- Assess the adapter's own installation, not the installation of the battery
+  or charger. A useful charging function alone does not establish eligibility.
 
 14. Cleats
-- Leasable: cleats (Schuhplatten / Pedalplatten) when matching pedals are also being leased for the same bicycle
-- Not leasable: cleats alone or without confirmation that the matching pedals are also being leased
-- Pedal compatibility alone is insufficient. If leasing the matching pedals is unconfirmed, this rule matches with answer `NO`.
+- Not leasable: cleats (Schuhplatten / Pedalplatten) attached to shoes rather
+  than bicycle parts, including cleats supplied or leased with matching pedals
+- Matching-pedal compatibility or joint leasing does not make the cleats a
+  dependent fixed bicycle installation. Answer `NO`.
 
-15. Major bicycle conversions
+15. Brake upgrades
+- Leasable: brake upgrade installed as a dependent fixed bicycle component
+- Not leasable: spare or uninstalled brake-upgrade parts, or an upgrade whose
+  installation on the bicycle is unconfirmed
+- Assess the fitted upgrade itself, not a claim that the part is compatible.
+
+16. Land BW exclusions
+- Not leasable: battery-powered lighting (Akku-Beleuchtung), including StVZO-
+  compliant lighting; display-upgrade mounts (Halterung - Displayupgrade);
+  gearing components including hub gears, gearing groupset upgrades, shift
+  levers, electronic shift cables, mechanical shift cables, rear derailleurs,
+  front derailleurs, and bottom bracket gearboxes; and the excluded locks and
+  lock mounts in rule 8.
+- For an identified excluded type, answer `NO`, regardless of
+  price, permanent installation, technical function, or another generic approval.
+- Permanently installed pedelec lighting powered by the bicycle's electrical
+  system is distinct from the excluded battery-powered lighting. Brake parts
+  are distinct from the excluded gearing components.
+
+17. Major bicycle conversions
 - Not leasable: conversion systems that materially change the bicycle's original
   structural configuration, geometry, or wheel arrangement by replacing a core
   assembly. This includes a conversion module that replaces the original
@@ -143,7 +179,7 @@ Important:
   Generic adapter, cargo-module, technical-component, functional-unit, or
   permanent-mounting approvals do not override this exclusion.
 - Ordinary upgrades are not automatically major conversions. Replacement parts
-  remain excluded under rule 18, and other category exclusions still apply.
+  remain excluded under rule 20, and other category exclusions still apply.
 - For a clearly identified major conversion, answer `NO`. If the
   supplied information cannot establish whether it is a major conversion or an
   ordinary adapter or upgrade, answer `UNKNOWN`.
@@ -151,36 +187,38 @@ Important:
   warranty is void or invent warranty terms; the exclusion follows from the
   conversion itself and does not require a prediction about warranty coverage.
 
-16. Boxes, crates, and containers
+18. Boxes, crates, and containers
 - Treat additional storage boxes, crates, and containers like excluded baskets
   or bags. Permanent mounting, a rack adapter, or bicycle compatibility alone
   does not make them leasable.
 - Leasable: a box, crate, or container confirmed attached to the intended bicycle as
   part of its manufacturer's standard configuration, rather than added as an
-  additional accessory.
+  additional accessory, and itself a dependent fixed bicycle installation.
 - Cargo-bike exception: an additional box, crate, or container can qualify when
   custom-built specifically for the intended cargo bike, permanently attached
-  to it, and designed for that cargo bike in size and other respects. This
-  exception does not require the manufacturer's standard configuration.
+  as a dependent bicycle installation, and designed for that cargo bike in size
+  and other respects. This exception does not require the manufacturer's
+  standard configuration; it does not waive Land BW's fixed-installation rule.
 - Not leasable: other additional boxes, crates, or containers, including a
   general-purpose Euro container merely fitting a rack or loading platform.
   Matching dimensions, a compatible-model claim, manufacturer branding, or
   dealer installation alone establishes neither exception.
 - For an identified box, crate, or container, answer `YES` only
-  when one exception is confirmed. Otherwise answer `NO` and
-  explain the unmet or unconfirmed condition. Use `UNKNOWN`
-  only when the product type itself cannot be established.
+  when one exception and dependent fixed installation are confirmed. Otherwise
+  answer `NO` and explain the unmet or unconfirmed condition.
+  Use `UNKNOWN` only when the product type itself cannot
+  be established.
 - These exceptions apply to boxes, crates, and containers; they do not create
   a new approval for bags or baskets. Box covers and canopies follow rule 5.
 - This rule overrides generic rack, adapter, cargo-module, functional-unit, and
   permanent-mounting approvals. The major-conversion exclusion still applies.
 
-17. Bicycle-specific accessories
+19. Bicycle-specific accessories
 - Not leasable: general-purpose accessories not specifically designed for bicycles, including generic load-securing or safety sets intended for cars and other vehicles as well as bicycles. Being usable on a bicycle is insufficient.
 - Can not be determined: unclear whether the accessory is bicycle-specific or general-purpose. Assess its design and intended use, not the brand name alone.
 - For a confirmed general-purpose accessory, answer `NO`. This exclusion overrides other category approvals, including cargo-bike safety accessories.
 
-18. Replacement parts and accessories
+20. Replacement parts and accessories
 - Not leasable: any replacement part or accessory (Ersatzteil / Ersatzprodukt), including items replacing worn, damaged, lost, or missing items and spares for later replacement. NO replacements are allowed, even if bicycle-specific, permanently installed, or otherwise an approved type.
 - Can not be determined: unclear whether the item is a replacement or a new accessory/upgrade. Assess its stated purpose, not the brand or category alone.
 - For a confirmed replacement, answer `NO`. This exclusion overrides all category approvals; calling a replacement an "upgrade" does not make it leasable.
@@ -189,16 +227,25 @@ Important:
 
 - The listed not-leasable cases require answer `NO`, even when the product
   clearly matches a special-rule category.
-- For boxes, crates, and containers, apply rule 16 before generic cargo,
+- For boxes, crates, and containers, apply rule 18 before generic cargo,
   adapter, rack, functional-unit, or permanent-mounting approvals.
-- The major-conversion exclusion in rule 15 has priority over every generic
+- The major-conversion exclusion in rule 17 has priority over every generic
   approval, including adapter, cargo-module, technical-component, functional-unit,
   and permanent-mounting approvals.
-- The price limits stated above take precedence over generic lock, adapter, or
-  holder approvals. A bicycle pump mount still follows the 150 EUR maximum.
+- The specific exclusions in rule 16 have priority over every generic
+  approval above. In particular, generic holder approval does not admit a
+  display-upgrade mount or a bicycle lock mount.
+- The frame-lock and pump price limits also have priority over generic
+  approvals. Missing required `price_eur` is a matched rule requiring answer `NO`.
 - Assess this submitted product only. No order quantities or complete order
   contents are supplied. Do not invent them or claim that order quantity limits
   have been checked.
+- For every matched special-rule type, answer `YES` requires confirmed dependent
+  fixed installation of the submitted item itself. If unmet or unconfirmed,
+  answer `NO`. Product names, compatibility, a fixed holder,
+  joint leasing, or bicycle-specific design alone do not satisfy this condition.
+- For an identified type that requires confirmed fixed installation, missing
+  installation evidence requires answer `NO` under this policy.
 - Answer the question: "Is this accessory leasable according to the matched rule?"
 - Answer `YES` when an applicable special rule confirms that the accessory is
   leasable and all of that rule's approval conditions are satisfied.

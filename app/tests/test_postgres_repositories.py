@@ -8,9 +8,9 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.adapters.persistence.postgresql import PostgresLLMRequestRepository, PostgresValidationReportRepository
-from app.adapters.llm.client import LLMResponse, LLMSource
+from app.adapters.llm.client import LLMResponse, LLMSource, LLMUsage
 from app.adapters.llm.recording import LLMRequest
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.product import Product, ProductOrigin, ProductType
 from app.domain.validation_results import (
     ReportStatus,
@@ -51,7 +51,11 @@ class RecordingEngine:
             self.committed = True
 
 
-def report() -> ValidationReport:
+def report(
+    *,
+    validation_status: ValidationStatus = ValidationStatus.REJECTED,
+    validation_id: str = "accessory_leasability",
+) -> ValidationReport:
     product = Product(
         product_type=ProductType.ACCESSORY,
         brand="Example",
@@ -61,14 +65,14 @@ def report() -> ValidationReport:
     )
     execution = ValidationExecution(
         product=product,
-        validation_id="accessory_leasability",
+        validation_id=validation_id,
         result=ValidationResult(
-            status=ValidationStatus.REJECTED,
+            status=validation_status,
             details="Not leasable.",
             criterion_results=(
                 CriterionResult(CriterionAnswer.YES, "Fixed.", "mounted"),
-                SpecialRuleResult(
-                    CriterionAnswer.YES, CriterionAnswer.NO, "Override.", "special_rules"
+                CriterionResult(
+                    CriterionAnswer.NO, "Override.", "special_rules"
                 ),
             ),
         ),
@@ -86,15 +90,40 @@ def test_report_save_writes_complete_history_in_one_transaction():
 
     assert engine.committed
     assert [table for table, _ in engine.connection.statements] == [
-        "products", "validation_executions"
+        "product", "validation_execution"
     ]
     product_row = engine.connection.statements[0][1]
     execution_row = engine.connection.statements[1][1]
     assert product_row["id"] == saved.product.id
     assert product_row["price"] == Decimal("49.99")
-    assert product_row["report_status"] == "INVALID"
+    assert product_row["validation_status"] == "INVALID"
+    assert product_row["leasability_validation_status"] == "REJECTED"
     assert execution_row["product_id"] == saved.product.id
     assert execution_row["status"] == "REJECTED"
+
+
+@pytest.mark.parametrize(
+    ("validation_status", "validation_id", "expected"),
+    [
+        (ValidationStatus.PASSED, "accessory_leasability", "PASSED"),
+        (ValidationStatus.REJECTED, "accessory_leasability", "REJECTED"),
+        (ValidationStatus.UNDETERMINED, "accessory_leasability", "UNDETERMINED"),
+        (ValidationStatus.PASSED, "another_validation", None),
+    ],
+)
+def test_report_save_stores_leasability_result(
+    validation_status: ValidationStatus, validation_id: str, expected: str | None
+):
+    engine = RecordingEngine()
+
+    asyncio.run(
+        PostgresValidationReportRepository(cast(AsyncEngine, engine)).save(
+            report(validation_status=validation_status, validation_id=validation_id)
+        )
+    )
+
+    product_row = engine.connection.statements[0][1]
+    assert product_row["leasability_validation_status"] == expected
 
 
 def test_report_save_rolls_back_after_a_child_write_fails():
@@ -111,7 +140,9 @@ def test_llm_request_save_keeps_response_and_validation_identity():
     engine = RecordingEngine()
     execution = report().validations[0]
     request = LLMRequest(
-        validation_execution_id=execution.id,
+        product_id=execution.product.id,
+        validation_id=execution.validation_id,
+        description="leasability_check",
         prompt="Is this leasable?",
         instructions="Answer briefly",
         instructions_hash="a" * 64,
@@ -125,6 +156,7 @@ def test_llm_request_save_keeps_response_and_validation_identity():
             status="completed",
             tool_calls=("search",),
             sources=(LLMSource(url="https://example.com", title="Source"),),
+            usage=LLMUsage(input_tokens=12, output_tokens=5, total_tokens=17),
         ),
     )
 
@@ -132,9 +164,14 @@ def test_llm_request_save_keeps_response_and_validation_identity():
 
     assert engine.committed
     table, row = engine.connection.statements[0]
-    assert table == "llm_requests"
-    assert row["validation_execution_id"] == execution.id
+    assert table == "llm_request"
+    assert row["product_id"] == execution.product.id
+    assert row["validation_id"] == "accessory_leasability"
+    assert row["description"] == "leasability_check"
     assert row["requested_models"] == ["first", "second"]
     assert row["response"]["sources"] == [
         {"url": "https://example.com", "title": "Source"}
     ]
+    assert row["input_tokens"] == 12
+    assert row["output_tokens"] == 5
+    assert row["total_tokens"] == 17

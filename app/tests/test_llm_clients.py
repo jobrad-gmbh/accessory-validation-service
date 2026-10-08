@@ -11,6 +11,7 @@ from app.adapters.llm import (
     JevConfig,
     JevRequest,
     LLMError,
+    LLMRequestSpec,
     LLMResponseError,
     LLMTimeoutError,
     LiteLLMClient,
@@ -50,7 +51,84 @@ def response(text="Hello", status="completed", *, with_tool_call=False):
 
 
 @pytest.mark.asyncio
-async def test_generate_fallback_and_request_overrides():
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429, 500])
+async def test_structured_provider_errors_include_actionable_details(status):
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(
+            status,
+            json={"error": {
+                "message": "Unsupported reasoning effort 'xhigh'.",
+                "param": "reasoning.effort",
+                "code": "unsupported_parameter",
+                "type": "invalid_request_error",
+                "private_debug": "sensitive provider body",
+            }},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        with pytest.raises(LLMError) as error:
+            await LiteLLMClient(http, config()).generate(
+                LLMRequestSpec(prompt="sensitive prompt", description="special_rules")
+            )
+
+    details = str(error.value)
+    assert error.value.status_code == status
+    assert f"HTTP {status}" in details
+    assert "model 'first'" in details
+    assert "during 'special_rules'" in details
+    assert "Unsupported reasoning effort 'xhigh'." in details
+    assert "param: reasoning.effort" in details
+    assert "code: unsupported_parameter" in details
+    assert "type: invalid_request_error" in details
+    assert "sensitive" not in details
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_errors_redact_request_content_and_overridden_credentials():
+    caller_key = "arbitrary-caller-credential"
+    prompt = 'Private product\nwith "quotes"'
+    instructions = "Private validation instructions"
+
+    def handle(request):
+        return httpx.Response(400, json={"error": {
+            "message": (
+                f"Invalid request: {json.dumps(prompt)[1:-1]}; {instructions}; "
+                f"key={caller_key}; Bearer downstream-credential; sk-upstream-secret"
+            ),
+        }})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
+        client = LiteLLMClient(http, config(api_key="server-credential"))
+        with pytest.raises(LLMError) as error:
+            await client.generate(LLMRequestSpec(
+                prompt=prompt,
+                instructions=instructions,
+                config=client.config.with_overrides(api_key=caller_key),
+            ))
+
+    details = str(error.value)
+    assert "Invalid request" in details
+    assert "[REDACTED]" in details
+    for sensitive in (caller_key, "Private", "downstream-credential", "sk-upstream-secret"):
+        assert sensitive not in details
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {"type": "web_search"},
+        {
+            "type": "openrouter:web_search",
+            "parameters": {"engine": "auto", "max_results": 5},
+        },
+    ],
+)
+async def test_generate_fallback_and_request_overrides(tool):
     requests = []
 
     def handle(request):
@@ -60,7 +138,13 @@ async def test_generate_fallback_and_request_overrides():
                 400,
                 json={"error": {"message": "Invalid model name passed in model=first"}},
             )
-        return httpx.Response(200, json=response())
+        body = response()
+        body["usage"] = {
+            "input_tokens": 12,
+            "output_tokens": 5,
+            "total_tokens": 17,
+        }
+        return httpx.Response(200, json=body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         client = LiteLLMClient(http, config(api_key="secret"))
@@ -68,20 +152,21 @@ async def test_generate_fallback_and_request_overrides():
             temperature=0.2, max_tokens=50, timeout_seconds=3
         )
         result = await client.generate(
-            "Hello",
-            instructions="Be brief",
-            config=override,
-            tools=(
-                {
-                    "type": "openrouter:web_search",
-                    "parameters": {"engine": "auto", "max_results": 5},
-                },
-            ),
-            tool_choice="required",
+            LLMRequestSpec(
+                prompt="Hello",
+                instructions="Be brief",
+                config=override,
+                tools=(tool,),
+                tool_choice="required",
+            )
         )
         assert result.text == "Hello"
         assert result.model == "actual-model"
         assert result.status == "completed"
+        assert result.usage is not None
+        assert result.usage.input_tokens == 12
+        assert result.usage.output_tokens == 5
+        assert result.usage.total_tokens == 17
         assert client.config.temperature is None
     bodies = [json.loads(r.content) for r in requests]
     assert [b["model"] for b in bodies] == ["first", "second"]
@@ -89,12 +174,7 @@ async def test_generate_fallback_and_request_overrides():
     assert bodies[-1]["max_output_tokens"] == 50
     assert bodies[-1]["input"] == "Hello"
     assert bodies[-1]["instructions"] == "Be brief"
-    assert bodies[-1]["tools"] == [
-        {
-            "type": "openrouter:web_search",
-            "parameters": {"engine": "auto", "max_results": 5},
-        }
-    ]
+    assert bodies[-1]["tools"] == [tool]
     assert bodies[-1]["tool_choice"] == "required"
     assert bodies[-1]["store"] is False
     assert str(requests[-1].url) == "https://llm.example/v1/responses"
@@ -119,12 +199,15 @@ async def test_response_reports_tool_calls_and_citation_sources():
         return httpx.Response(200, json=body)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        result = await LiteLLMClient(http, config()).generate("hi")
+        result = await LiteLLMClient(http, config()).generate(
+            LLMRequestSpec(prompt="hi")
+        )
 
     assert result.tool_calls == ("web_search_call",)
     assert len(result.sources) == 1
     assert result.sources[0].url == "https://manufacturer.example/product"
     assert result.sources[0].title == "Product page"
+    assert result.usage is None
 
 
 @pytest.mark.asyncio
@@ -145,7 +228,7 @@ async def test_explicit_unsupported_web_search_error_is_classified():
                 base_url="https://llm.example/v1", models=("local-model",)
             )
             await LiteLLMClient(http, selected).generate(
-                "hi", tools=({"type": "web_search"},)
+                LLMRequestSpec(prompt="hi", tools=({"type": "web_search"},))
             )
 
     assert error.value.model == "local-model"
@@ -172,7 +255,7 @@ async def test_unsupported_tools_parameter_is_classified_for_web_search_request(
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(UnsupportedLLMToolError):
             await LiteLLMClient(http, selected).generate(
-                "hi", tools=({"type": "openrouter:web_search"},)
+                LLMRequestSpec(prompt="hi", tools=({"type": "openrouter:web_search"},))
             )
 
 
@@ -187,7 +270,7 @@ async def test_exhausted_models():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         client = LiteLLMClient(http, config())
         with pytest.raises(ModelsNotFoundError) as error:
-            await client.generate("hi")
+            await client.generate(LLMRequestSpec(prompt="hi"))
     assert calls == ["first", "second"]
     assert error.value.models == ("first", "second")
 
@@ -203,7 +286,9 @@ async def test_http_errors_do_not_fallback_or_leak_body(status):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(LLMError) as error:
-            await LiteLLMClient(http, config()).generate("sensitive prompt")
+            await LiteLLMClient(http, config()).generate(
+                LLMRequestSpec(prompt="sensitive prompt")
+            )
     assert len(calls) == 1
     assert error.value.status_code == status
     assert "sensitive" not in str(error.value)
@@ -251,7 +336,42 @@ async def test_invalid_responses(body):
         )
     ) as http:
         with pytest.raises(LLMResponseError):
-            await LiteLLMClient(http, config()).generate("hi")
+            await LiteLLMClient(http, config()).generate(LLMRequestSpec(prompt="hi"))
+
+
+@pytest.mark.asyncio
+async def test_invalid_responses_keep_cause_and_failure_details():
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"object": "response", "output": []}),
+        )
+    ) as http:
+        with pytest.raises(LLMResponseError) as error:
+            await LiteLLMClient(http, config()).generate(LLMRequestSpec(prompt="hi"))
+    assert isinstance(error.value.__cause__, ValidationError)
+    assert "model 'first'" in str(error.value)
+    assert "status: Field required" in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_failed_responses_report_provider_error_without_request_content():
+    body = {
+        "object": "response",
+        "status": "failed",
+        "output": [],
+        "error": {"code": "server_error", "message": "Failed on: private prompt"},
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+    ) as http:
+        with pytest.raises(LLMResponseError) as error:
+            await LiteLLMClient(http, config()).generate(
+                LLMRequestSpec(prompt="private prompt")
+            )
+    details = str(error.value)
+    assert "status: failed" in details
+    assert "code: server_error" in details
+    assert "private prompt" not in details
 
 
 @pytest.mark.asyncio
@@ -271,9 +391,12 @@ async def test_transport_errors_and_cancellation(error, expected):
         raise error
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-        with pytest.raises(expected):
-            await LiteLLMClient(http, config()).generate("hi")
+        with pytest.raises(expected) as raised:
+            await LiteLLMClient(http, config()).generate(LLMRequestSpec(prompt="hi"))
     assert len(calls) == 1
+    if expected is not asyncio.CancelledError:
+        assert raised.value.__cause__ is error
+        assert "secret" not in str(raised.value)
 
 
 @pytest.mark.asyncio
@@ -284,7 +407,9 @@ async def test_total_generation_timeout():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
         with pytest.raises(LLMTimeoutError):
-            await LiteLLMClient(http, config(timeout_seconds=0.01)).generate("hi")
+            await LiteLLMClient(http, config(timeout_seconds=0.01)).generate(
+                LLMRequestSpec(prompt="hi")
+            )
 
 
 def test_env_defaults_and_explicit_values(monkeypatch):
@@ -483,10 +608,14 @@ async def test_concurrent_overrides_are_isolated():
         client = LiteLLMClient(http, config())
         await asyncio.gather(
             client.generate(
-                "one",
-                config=client.config.with_overrides(models=("custom",), temperature=0),
+                LLMRequestSpec(
+                    prompt="one",
+                    config=client.config.with_overrides(
+                        models=("custom",), temperature=0
+                    ),
+                )
             ),
-            client.generate("two"),
+            client.generate(LLMRequestSpec(prompt="two")),
         )
     assert bodies[0]["model"] == "custom"
     assert bodies[0]["temperature"] == 0

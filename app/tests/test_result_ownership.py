@@ -6,7 +6,7 @@ import pytest
 from app.adapters.web.schemas import AccessoryInput, ValidationReportResponse
 from app.main import app, lifespan
 from app.adapters.persistence.postgresql import PostgresValidationReportRepository
-from app.domain.criterion import CriterionAnswer, CriterionResult, SpecialRuleResult
+from app.domain.criterion import CriterionAnswer, CriterionResult
 from app.domain.errors import (
     ValidationConfigurationError,
     ValidationExecutionError,
@@ -134,8 +134,8 @@ def test_service_rejects_a_validation_execution_for_another_product():
 
 def test_service_saves_complete_report_before_returning():
     repository = AsyncMock()
-    criterion = SpecialRuleResult(
-        CriterionAnswer.YES, CriterionAnswer.NO, "Override.", "special_rules"
+    criterion = CriterionResult(
+        CriterionAnswer.NO, "Override.", "special_rules"
     )
 
     class Check(Validation):
@@ -233,8 +233,7 @@ def test_report_response_exposes_criterion_results():
         details="Rack is leasable.",
         criterion_results=[
             CriterionResult(CriterionAnswer.YES, "Fixed.", criterion_id="rack"),
-            SpecialRuleResult(
-                CriterionAnswer.YES,
+            CriterionResult(
                 CriterionAnswer.NO,
                 "Override.",
                 criterion_id="special_rules",
@@ -257,9 +256,8 @@ def test_report_response_exposes_criterion_results():
         {"criterion_id": "rack", "answer": "YES", "details": "Fixed."},
         {
             "criterion_id": "special_rules",
-            "answer": "YES",
+            "answer": "NO",
             "details": "Override.",
-            "leasable": "NO",
         },
     ]
 

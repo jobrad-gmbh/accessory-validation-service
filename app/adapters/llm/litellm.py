@@ -1,22 +1,25 @@
 import asyncio
+import json
+import re
 from typing import Any, Literal, Mapping, Sequence
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import SettingsConfigDict
 
-from app.adapters.llm.client import LLMResponse, LLMSource
-from app.adapters.llm.config import ChatConfig
+from app.adapters.llm.client import LLMRequestSpec, LLMResponse, LLMSource, LLMUsage
+from app.adapters.llm.config import LLMClientConfig
 from app.adapters.llm.errors import (
     LLMError,
     LLMResponseError,
     LLMTimeoutError,
     ModelsNotFoundError,
     UnsupportedLLMToolError,
+    summarize_validation_error,
 )
 
 
-class LiteLLMConfig(ChatConfig):
+class LiteLLMConfig(LLMClientConfig):
     model_config = SettingsConfigDict(env_prefix="LITELLM_")
 
 
@@ -37,6 +40,14 @@ class _OutputItem(BaseModel):
     content: list[_ContentPart] | None = None
 
 
+class _Usage(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+
+
 class _Response(BaseModel):
     model_config = ConfigDict(strict=True)
 
@@ -45,29 +56,49 @@ class _Response(BaseModel):
     output: list[_OutputItem]
     model: str | None = None
     error: dict[str, Any] | None = None
+    usage: _Usage | None = None
 
 
-def _decode(data: str | bytes) -> _Response:
+def _decode(data: str | bytes, model: str) -> _Response:
     try:
         return _Response.model_validate_json(data)
-    except ValidationError:
-        raise LLMResponseError("Invalid Responses API response") from None
+    except ValidationError as error:
+        raise LLMResponseError(
+            f"Invalid Responses API response for model '{model}': "
+            f"{summarize_validation_error(error)}"
+        ) from error
 
 
-def _text(response: _Response) -> str:
+def _text(
+    response: _Response,
+    model: str,
+    request: LLMRequestSpec,
+    config: LLMClientConfig,
+) -> str:
     if response.status != "completed" or response.error is not None:
-        raise LLMResponseError("Incomplete model response")
+        details = f"Incomplete response from model '{model}'; status: {response.status}"
+        for field in ("code", "message"):
+            value = (response.error or {}).get(field)
+            if isinstance(value, str) and value.strip():
+                details += f"; {field}: {value}"
+        raise LLMResponseError(_sanitize_error_message(details, request, config))
     text_parts = []
     for item in response.output:
         if item.type != "message":
             continue
         for part in item.content or []:
             if part.type == "refusal" and part.refusal:
-                raise LLMResponseError("The model refused the request")
+                raise LLMResponseError(
+                    _sanitize_error_message(
+                        f"Model '{model}' refused the request: {part.refusal}",
+                        request,
+                        config,
+                    )
+                )
             if part.type == "output_text" and part.text:
                 text_parts.append(part.text)
     if not text_parts:
-        raise LLMResponseError("Empty model response")
+        raise LLMResponseError(f"Empty response from model '{model}'")
     return "\n".join(text_parts)
 
 
@@ -106,19 +137,38 @@ def _error_body(response: httpx.Response) -> dict[str, Any]:
     return error if isinstance(error, dict) else {}
 
 
+def _sanitize_error_message(
+    message: str, request: LLMRequestSpec, config: LLMClientConfig
+) -> str:
+    sensitive_values = [request.prompt, request.instructions]
+    if config.api_key is not None:
+        sensitive_values.append(config.api_key.get_secret_value())
+    for value in sorted(set(sensitive_values), key=len, reverse=True):
+        if value:
+            for representation in (value, json.dumps(value)[1:-1]):
+                message = message.replace(representation, "[REDACTED]")
+    message = re.sub(
+        r"\bBearer\s+\S+|\bsk-[\w-]+",
+        "[REDACTED]",
+        message,
+        flags=re.IGNORECASE,
+    )
+    return " ".join(message.split())[:1000]
+
+
 class LiteLLMClient:
     """Text generation through LiteLLM Proxy's Responses API endpoint."""
 
     def __init__(
         self,
         http_client: httpx.AsyncClient,
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
     ) -> None:
         self._http = http_client
         self._config = config if config is not None else LiteLLMConfig.from_env()
 
     @property
-    def config(self) -> ChatConfig:
+    def config(self) -> LLMClientConfig:
         return self._config
 
     def _model_not_found(self, response: httpx.Response) -> bool:
@@ -139,7 +189,7 @@ class LiteLLMClient:
     def _request(
         prompt: str,
         instructions: str,
-        config: ChatConfig,
+        config: LLMClientConfig,
         model: str,
         tools: Sequence[Mapping[str, Any]],
         tool_choice: str | Mapping[str, Any] | None,
@@ -161,6 +211,8 @@ class LiteLLMClient:
             payload["temperature"] = config.temperature
         if config.max_tokens is not None:
             payload["max_output_tokens"] = config.max_tokens
+        if config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": config.reasoning_effort}
         headers = {"Accept": "application/json"}
         if config.api_key is not None:
             headers["Authorization"] = f"Bearer {config.api_key.get_secret_value()}"
@@ -176,13 +228,14 @@ class LiteLLMClient:
     def _check_status(
         response: httpx.Response,
         model: str,
-        tools: Sequence[Mapping[str, Any]],
+        request: LLMRequestSpec,
+        config: LLMClientConfig,
     ) -> None:
         if not response.is_success:
             error = _error_body(response)
             message = str(error.get("message", "")).lower()
             requested_tool_types = {
-                str(tool.get("type", "")) for tool in tools if tool.get("type")
+                str(tool.get("type", "")) for tool in request.tools if tool.get("type")
             }
             unsupported = any(
                 phrase in message
@@ -207,48 +260,62 @@ class LiteLLMClient:
                 raise UnsupportedLLMToolError(
                     "web_search", model, status_code=response.status_code
                 )
+            details = f"LLM service returned HTTP {response.status_code} for model '{model}'"
+            if request.description:
+                details += f" during '{request.description}'"
+            for field in ("message", "param", "code", "type"):
+                value = error.get(field)
+                if isinstance(value, str) and value.strip():
+                    details += f"; {field}: {value}"
             raise LLMError(
-                f"LLM service returned HTTP {response.status_code}",
+                _sanitize_error_message(details, request, config),
                 status_code=response.status_code,
             )
 
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        instructions: str = "",
-        config: ChatConfig | None = None,
-        tools: Sequence[Mapping[str, Any]] = (),
-        tool_choice: str | Mapping[str, Any] | None = None,
-    ) -> LLMResponse:
-        selected = config if config is not None else self.config
+    async def generate(self, request: LLMRequestSpec) -> LLMResponse:
+        selected = request.config if request.config is not None else self.config
         for model in selected.models:
             try:
                 async with asyncio.timeout(selected.timeout_seconds):
                     response = await self._http.post(
                         **self._request(
-                            prompt,
-                            instructions,
+                            request.prompt,
+                            request.instructions,
                             selected,
                             model,
-                            tools,
-                            tool_choice,
+                            request.tools,
+                            request.tool_choice,
                         )
                     )
-            except (TimeoutError, httpx.TimeoutException):
-                raise LLMTimeoutError("LLM request timed out") from None
-            except httpx.RequestError:
-                raise LLMError("Could not reach the LLM service") from None
+            except (TimeoutError, httpx.TimeoutException) as error:
+                raise LLMTimeoutError(
+                    f"LLM request for model '{model}' timed out after "
+                    f"{selected.timeout_seconds:g}s"
+                ) from error
+            except httpx.RequestError as error:
+                raise LLMError(
+                    f"Could not reach the LLM service for model '{model}' "
+                    f"({type(error).__name__})"
+                ) from error
             if self._model_not_found(response):
                 continue
-            self._check_status(response, model, tools)
-            result = _decode(response.content)
-            content = _text(result)
+            self._check_status(response, model, request, selected)
+            result = _decode(response.content, model)
+            content = _text(result, model, request, selected)
             return LLMResponse(
                 content,
                 result.model or model,
                 result.status,
                 _tool_calls(result),
                 _sources(result),
+                usage=(
+                    LLMUsage(
+                        input_tokens=result.usage.input_tokens,
+                        output_tokens=result.usage.output_tokens,
+                        total_tokens=result.usage.total_tokens,
+                    )
+                    if result.usage is not None
+                    else None
+                ),
             )
         raise ModelsNotFoundError(selected.models)

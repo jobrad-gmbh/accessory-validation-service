@@ -1,10 +1,12 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID
 
 from app.adapters.llm import (
-    ChatConfig,
+    LLMClientConfig,
     LLMClient,
+    LLMRequestSpec,
     LLMSource,
     UnsupportedLLMToolError,
 )
@@ -15,10 +17,7 @@ from app.domain.errors import (
 from app.domain.product import ProductInput
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / "product_information.md"
-WEB_SEARCH_TOOL = {
-    "type": "web_search",
-    "parameters": {"engine": "auto", "max_results": 5},
-}
+WEB_SEARCH_TOOL = {"type": "web_search"}
 
 
 @dataclass(frozen=True)
@@ -40,20 +39,27 @@ class AccessoryProductInformationService:
         product: ProductInput,
         *,
         use_web_search: bool = True,
-        config: ChatConfig | None = None,
+        config: LLMClientConfig | None = None,
+        product_id: UUID | None = None,
+        validation_id: str | None = None,
     ) -> AccessoryProductInformation:
         tools = (WEB_SEARCH_TOOL,) if use_web_search else ()
         tool_choice = "required" if use_web_search else None
         try:
             response = await self._llm_client.generate(
-                _product_prompt(product),
-                instructions=PROMPT_PATH.read_text(encoding="utf-8").strip(),
-                config=config,
-                tools=tools,
-                tool_choice=tool_choice,
+                LLMRequestSpec(
+                    prompt=_product_prompt(product),
+                    instructions=PROMPT_PATH.read_text(encoding="utf-8").strip(),
+                    config=config,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    description="product_information",
+                    product_id=product_id,
+                    validation_id=validation_id,
+                )
             )
         except UnsupportedLLMToolError as error:
-            raise WebSearchNotSupportedError(error.model) from None
+            raise WebSearchNotSupportedError(error.model) from error
 
         used_web_search = "web_search_call" in response.tool_calls
         if use_web_search and not used_web_search:
@@ -74,6 +80,7 @@ def _product_prompt(product: ProductInput) -> str:
         {
             "brand": product.brand,
             "model": product.model,
+            "price": str(product.price) if product.price is not None else None,
             "category": product.category,
             "year": product.year,
             "size": product.size,
