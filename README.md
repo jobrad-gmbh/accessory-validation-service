@@ -103,6 +103,54 @@ Criterion ids: `explicitly_not_leasable_type`, `explicitly_leasable_type`,
 `technical_bicycle_component`, `stvzo_equipment`, `functional_unit_with_bicycle`,
 `permanently_mounted`, `special_rules`.
 
+## Batch validation from JSONL
+
+Put one accessory object on each nonblank line of an input `.jsonl` file:
+
+```jsonl
+{"brand":"Example","model":"Rear rack","price":79.90,"origin":{"source":"dataset","external_ref":"ACC-1"}}
+{"brand":"Example","model":"Front light","price":49.90,"origin":{"source":"dataset","external_ref":"ACC-2"},"context":{"is_bawu_order":true}}
+```
+
+Run the batch script from the repository root:
+
+```bash
+uv run python scripts/validate_accessories.py \
+  --input /path/to/accessories.jsonl \
+  --output /path/to/results.jsonl \
+  --api-key "$LLM_API_KEY" \
+  --endpoint http://localhost:8000/api/v1/accessories/validate/test \
+  --concurrency 8
+```
+
+- `--concurrency` accepts 1–32 concurrent validations; the default is 1.
+- `--from-record 100 --to-record 200` optionally selects an inclusive, 1-based
+  range. Blank lines are ignored; malformed nonblank lines count as records.
+  Either bound may be used alone.
+- Product information is included by default. To disable it, pass
+  `--no-include-product-information`.
+- `--endpoint` defaults to the local test endpoint shown above. `--timeout`
+  controls the HTTP timeout in seconds and defaults to 1800.
+- Each input record may include `llm_settings` and `criterion_settings`. The
+  script preserves these settings, overriding `llm_settings.api_key` with the
+  flag and `include_product_information` with the script's selection.
+- Results are appended to the output file as requests finish, with each line
+  flushed and synced to disk. Existing results are preserved; use `--overwrite`
+  to replace them. Repeating a range appends duplicate results; there is no
+  automatic resume or retry.
+
+Each output line contains `record_number`, `input`, `status_code`, `result`, and
+`error`. Concurrent results may arrive out of input order; use `record_number`
+to match them. The API report is stored in `result`, including its product
+information. Invalid input, HTTP errors, and network failures are saved in
+`error`, and the remaining records continue. API keys are redacted from saved
+data. A business validation result of `INVALID` is still a successful API call.
+
+The script exits with code 0 when all selected requests succeed, 1 when a
+record fails or the batch cannot continue, and 130 when interrupted with Ctrl+C.
+Completed rows remain available after interruption; in-flight requests may have
+reached the server without producing a saved result.
+
 ## Development
 
 ```bash
