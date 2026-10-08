@@ -64,7 +64,7 @@ async def standard_leasability_strategy(
     special_rule = await collector.run(
         SpecialRulesCriterion(litellm_client), request, product_information
     )
-    if special_rule.answer is CriterionAnswer.YES:
+    if special_rule.answer is CriterionAnswer.YES and special_rule.leasable is not CriterionAnswer.UNKNOWN:
         return _result(
             special_rule.leasable is CriterionAnswer.YES, special_rule, collector
         )
@@ -127,7 +127,7 @@ async def bawu_leasability_strategy(
     special_rule = await collector.run(
         BawuSpecialRulesCriterion(litellm_client), request, product_information
     )
-    if special_rule.answer is CriterionAnswer.YES:
+    if special_rule.answer is CriterionAnswer.YES and special_rule.leasable is not CriterionAnswer.UNKNOWN:
         return _result(
             special_rule.leasable is CriterionAnswer.YES, special_rule, collector
         )
